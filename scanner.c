@@ -1,7 +1,7 @@
 /** 
  * Project IFJ26 compiler
  * File: scanner.c
- * Description: Implementation of the lexical analyzer 
+ * Description: Implementation of the lexical analyzer (DFA)
  * Author: <xkotliy00> Yaryna Kotliarenko
  */
 
@@ -12,11 +12,11 @@
 #include <ctype.h>
 #include <stdbool.h>
 
-// Dynamic, expandable buffer for text of unknown length
+// Dynamic expandable string buffer for tokens of unknown length
 typedef struct {
-    char *data;      // pointer to the character array
-    size_t length;   // number of characters currently stored
-    size_t capacity; // total allocated capacity of the buffer
+    char *data;      // Pointer to the character array
+    size_t length;   // Current character count
+    size_t capacity; // Total allocated buffer capacity
 } DynStr;
 
 // Initializes an empty string buffer
@@ -32,7 +32,7 @@ static bool dynstr_init(DynStr *s) {
     return true;
 }
 
-// Append a character to the string buffer, expanding if necessary
+// Appends a character to the buffer, doubling capacity if needed
 static bool dynstr_append(DynStr *s, char c) {
     if (s->length + 2 > s->capacity) {
         size_t new_cap = s->capacity * 2;
@@ -47,7 +47,7 @@ static bool dynstr_append(DynStr *s, char c) {
     return true;
 }
 
-// Transfer buffer ownership to token attribute and reset the buffer
+// Transfers ownership of the string buffer to the token attribute and resets buffer
 static char *dynstr_take(DynStr *s) {
     char *result = s->data;
     s->data = NULL;
@@ -56,7 +56,7 @@ static char *dynstr_take(DynStr *s) {
     return result;
 }
 
-// Free the memory allocated for the string buffer
+// Frees heap memory used by the dynamic string buffer
 static void dynstr_free(DynStr *s) {
     if (s->data) {
         free(s->data);
@@ -81,7 +81,7 @@ void free_token(Token *token) {
     }
 }
 
-// Сверка ключевых слов по спецификации IFJ26 (Раздел 1.1)
+// Keyword lookup matching IFJ26 specification (Section 1.1)
 static Token_type check_keyword(const char *str) {
     if (strcmp(str, "def") == 0) return T_DEF;
     if (strcmp(str, "do") == 0) return T_DO;
@@ -98,7 +98,7 @@ static Token_type check_keyword(const char *str) {
     if (strcmp(str, "var") == 0) return T_VAR;
     if (strcmp(str, "while") == 0) return T_WHILE;
 
-    return T_ID; // Идентификатор, если слова нет в списке ключевых
+    return T_ID; // Return general identifier type if not in keyword table
 }
 
 typedef enum {
@@ -117,7 +117,7 @@ int get_token(Token *token) {
 
     DynStr buffer;
     if (!dynstr_init(&buffer)) {
-        return 1; // Ошибка аллокации (внутренняя ошибка / лексический сбой)
+        return 1; // Memory allocation failure (internal scanner error)
     }
 
     while (1) {
@@ -125,13 +125,13 @@ int get_token(Token *token) {
 
         switch (state) {
             case STATE_START:
-                // 1. Пропуск пробелов и табуляций (S -> S)
+                // 1. Skip spaces, tabs, and carriage returns (S -> S loop)
                 if (c == ' ' || c == '\t' || c == '\r') {
                     state = STATE_START;
                     break;
                 }
 
-                // 2. Токен EOL (перевод строки \n)
+                // 2. EOL token (newline \n)
                 if (c == '\n') {
                     dynstr_free(&buffer);
                     token->type = T_EOL;
@@ -141,7 +141,7 @@ int get_token(Token *token) {
                     return 0;
                 }
 
-                // 3. Токен EOF (конец файла)
+                // 3. EOF token (end of file)
                 if (c == EOF) {
                     dynstr_free(&buffer);
                     token->type = T_EOF;
@@ -150,20 +150,21 @@ int get_token(Token *token) {
                     return 0;
                 }
 
-                // 4. Вход в идентификаторы по лекциям
+                // 4. Identifier transition starting with letter
                 if (isalpha(c)) {
                     dynstr_append(&buffer, (char)c);
                     state = STATE_ID;
                     break;
                 }
 
+                // 5. Transition starting with underscore
                 if (c == '_') {
                     dynstr_append(&buffer, (char)c);
                     state = STATE_UNDERSCORE;
                     break;
                 }
 
-                // 5. Односимвольные операторы
+                // 6. Single-character operators and punctuation
                 if (c == '+' || c == '-' || c == '*' || c == '(' || 
                     c == ')' || c == ',' || c == ':' || c == ';') {
                     dynstr_free(&buffer);
@@ -181,19 +182,18 @@ int get_token(Token *token) {
                     return 0;
                 }
 
-                // Неизвестный символ
+                // Unexpected character (lexical error)
                 dynstr_free(&buffer);
                 return 1;
 
             case STATE_UNDERSCORE:
-                // Одиночное '_' запрещено спецификацией.
-                // За '_' обязана идти буква, цифра или '_'
+                // Standalone '_' is forbidden. Must be followed by [a-zA-Z0-9_]
                 if (isalnum(c) || c == '_') {
                     dynstr_append(&buffer, (char)c);
                     state = STATE_ID;
                 } else {
                     dynstr_free(&buffer);
-                    return 1; // Ошибка 1
+                    return 1; // Lexical error code 1
                 }
                 break;
 
@@ -201,7 +201,7 @@ int get_token(Token *token) {
                 if (isalnum(c) || c == '_') {
                     dynstr_append(&buffer, (char)c);
                 } else {
-                    // Возврат лишнего прочитанного символа обратно в поток по лекции!
+                    // Push back excess non-identifier character into stream
                     ungetc(c, source_file);
 
                     char *attr_str = dynstr_take(&buffer);
