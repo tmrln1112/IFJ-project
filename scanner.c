@@ -48,7 +48,7 @@ static bool dynstr_append(DynStr *s, char c) {
     return true;
 }
 
-/// Hands the collected text over to the caller (we use it as token->attribute).
+// Hands the collected text over to the caller (we use it as token->attribute).
 // After this the buffer is empty and the caller is responsible for free().
 
 static char *dynstr_take(DynStr *s) {
@@ -129,7 +129,7 @@ static int lex_error(DynStr *buf) {
     return 1;
 }
 
-// fills in the token and returns 0 (success), so callers can write
+// fills in the token fields and returns 0 (success)
 static int make_token(Token *token, Token_type type, char *attr) {
     token->type = type;
     token->attribute = attr; // NULL when the token carries no text
@@ -139,19 +139,33 @@ static int make_token(Token *token, Token_type type, char *attr) {
 /* ---------- States of the automaton ---------- */
 
 typedef enum {
+    /* ---------- Initial & Identifier states ---------- */
     STATE_START,             // initial state / whitespace skipping
     STATE_ID,                // processing identifier or keyword
     STATE_UNDERSCORE,        // read a leading '_', needs one more character
+    /* ---------- Integer states ---------- */
     STATE_ZERO,              // read a '0'
     STATE_INT,               // inside an integer that started with 1-9
     STATE_INT_UNDERSCORE,    // read '_' in an integer, a digit must follow
+    /* ---------- Double states ---------- */
     STATE_DOT,               // read '.', at least one digit must follow
     STATE_DOUBLE,            // processing Double fractional digits
     STATE_DOUBLE_UNDERSCORE, // read '_' in Double fractional part
     STATE_EXP,               // read 'e' or 'E', expecting a sign or a digit
     STATE_EXP_SIGN,          // read the sign of the exponent, digit must follow
     STATE_EXP_DIGIT,         // processing exponent digits
-    STATE_EXP_UNDERSCORE     // read '_' in the exponent
+    STATE_EXP_UNDERSCORE,     // read '_' in the exponent
+    /* ---------- Comments & Division states ---------- */
+    STATE_SLASH,
+    STATE_LINE_COMMENT,
+    STATE_BLOCK_COMMENT,
+    STATE_BLOCK_COMMENT_SLASH,
+    STATE_BLOCK_COMMENT_END,
+    /* ---------- Operators & Assignment states ---------- */
+    STATE_ASSIGN,
+    STATE_EXCLAM,
+    STATE_LESS,
+    STATE_GREATER
 } State;
 
 /* ---------- Main function ---------- */
@@ -170,6 +184,7 @@ int get_token(Token *token) {
 
     State state = STATE_START;
     int c;
+    int comment_depth = 0;
 
     DynStr buffer;
     if (!dynstr_init(&buffer)) {
@@ -234,6 +249,28 @@ int get_token(Token *token) {
                 state = STATE_DOT;
                 break;
             }
+
+            if (c == '/') {
+                state = STATE_SLASH;
+                break;
+            }
+            if (c == '=') {
+                state = STATE_ASSIGN;
+                break;
+            }
+            if (c == '!') {
+                state = STATE_EXCLAM;
+                break;
+            }
+            if (c == '<') {
+                state = STATE_LESS;
+                break;
+            }
+            if (c == '>') {
+                state = STATE_GREATER;
+                break;
+            }
+            
 
             //  single-character operators and delimiters
             switch (c) {
@@ -424,6 +461,118 @@ int get_token(Token *token) {
             } else {
                 // Trailing underscore after exponent digits is invalid
                 return lex_error(&buffer);
+            }
+            break;
+        /* ---------- Comments & Division ---------- */
+        case STATE_SLASH:
+            if (c == '/') {
+                state = STATE_LINE_COMMENT;
+            } else if (c == '*') {
+                comment_depth = 1;
+                state = STATE_BLOCK_COMMENT;
+            } else {
+                // single '/' -> division operator
+                ungetc(c, source_file);
+                dynstr_free(&buffer);
+                return make_token(token, T_DIV, NULL);
+            }
+            break;
+
+        case STATE_LINE_COMMENT:
+            if (c == '\n' || c == EOF) {
+                // end of line comment: unget character so STATE_START processes T_EOL / T_EOF
+                ungetc(c, source_file);
+                state = STATE_START;
+            }
+            // ignore all other characters inside line comment
+            break;
+
+        case STATE_BLOCK_COMMENT:
+            if (c == '*') {
+                state = STATE_BLOCK_COMMENT_END;
+            } else if (c == '/'){
+                state = STATE_BLOCK_COMMENT_SLASH;
+            } else if (c == '\n') {
+                current_line++; // track line numbers inside block comment
+            } else if (c == EOF) {
+                // unterminated block comment -> lexical error
+                return lex_error(&buffer);
+            }
+            break;
+
+            case STATE_BLOCK_COMMENT_SLASH:
+            if (c == '*') {
+                comment_depth++; 
+                state = STATE_BLOCK_COMMENT;
+            } else {
+                ungetc(c, source_file); 
+                state = STATE_BLOCK_COMMENT;
+            }
+            break;
+
+        case STATE_BLOCK_COMMENT_END:
+            if (c == '/') {
+                comment_depth--;
+                if (comment_depth == 0){
+                    state = STATE_START;
+                }else{
+                    state = STATE_BLOCK_COMMENT;
+                }
+                // closing block comment */ -> return to START
+            } else if (c == '*') {
+                // stay in END state to handle consecutive asterisks (e.g. '***')
+                state = STATE_BLOCK_COMMENT_END;
+            } else {
+                if (c == '\n') {
+                    current_line++;
+                } else if (c == EOF) {
+                    return lex_error(&buffer);
+                }
+                state = STATE_BLOCK_COMMENT;
+            }
+            break;
+
+        /* ---------- Comparison & Assignment operators ---------- */
+        case STATE_ASSIGN:
+            if (c == '=') {
+                dynstr_free(&buffer);
+                return make_token(token, T_EQ, NULL); // '=='
+            } else {
+                ungetc(c, source_file);
+                dynstr_free(&buffer);
+                return make_token(token, T_ASSIGN, NULL); // '='
+            }
+            break;
+
+        case STATE_EXCLAM:
+            if (c == '=') {
+                dynstr_free(&buffer);
+                return make_token(token, T_NEQ, NULL); // '!='
+            } else {
+                // standalone '!' is forbidden in IFJ26 -> lexical error
+                return lex_error(&buffer);
+            }
+            break;
+
+        case STATE_LESS:
+            if (c == '=') {
+                dynstr_free(&buffer);
+                return make_token(token, T_LESS_OR_EQ, NULL); // '<='
+            } else {
+                ungetc(c, source_file);
+                dynstr_free(&buffer);
+                return make_token(token, T_LESS_T, NULL); // '<'
+            }
+            break;
+
+        case STATE_GREATER:
+            if (c == '=') {
+                dynstr_free(&buffer);
+                return make_token(token, T_GREATER_OR_EQ, NULL); // '>='
+            } else {
+                ungetc(c, source_file);
+                dynstr_free(&buffer);
+                return make_token(token, T_GREATER_T, NULL); // '>'
             }
             break;
         }
