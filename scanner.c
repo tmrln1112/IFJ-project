@@ -165,7 +165,16 @@ typedef enum {
     STATE_ASSIGN,
     STATE_EXCLAM,
     STATE_LESS,
-    STATE_GREATER
+    STATE_GREATER,
+    /* ---------- String states ---------- */
+   
+    STATE_STRING_START,      // Node 'f1' (read initial '"')
+    STATE_STRING_QUOTE2,     // Node 'f2' (read '""')
+    STATE_STRING,            // Node 'STR' (inside single-line string literal)
+    STATE_STRING_ESC,        // Node 'f_esc' (read '\' inside single-line string)
+    STATE_STRING_MULTI,      // Node 'f_m' (inside """ multi-line string)
+    STATE_STRING_MULTI_Q1,   // Helper for closing multi-line string (read 1st closing '"')
+    STATE_STRING_MULTI_Q2    // Helper for closing multi-line string (read 2nd closing '"')
 } State;
 
 /* ---------- Main function ---------- */
@@ -268,6 +277,10 @@ int get_token(Token *token) {
             }
             if (c == '>') {
                 state = STATE_GREATER;
+                break;
+            }
+            if (c == '"') {
+                state = STATE_STRING_START; 
                 break;
             }
             
@@ -573,6 +586,93 @@ int get_token(Token *token) {
                 ungetc(c, source_file);
                 dynstr_free(&buffer);
                 return make_token(token, T_GREATER_T, NULL); // '>'
+            }
+            break;
+            /* ---------- String states (f1, f2, STR, f_esc, f_m) ---------- */
+        case STATE_STRING_START: // Node 'f1'
+            if (c == '"') {
+                state = STATE_STRING_QUOTE2; // Node 'f2' (read '""')
+            } else if (c == '\\') {
+                state = STATE_STRING_ESC; // Node 'f_esc'
+            } else if (c == '\n' || c == EOF) {
+                return lex_error(&buffer); // Unescaped LF is illegal in single-line string
+            } else {
+                dynstr_append(&buffer, (char)c);
+                state = STATE_STRING; // Node 'STR'
+            }
+            break;
+
+        case STATE_STRING_QUOTE2: // Node 'f2'
+            if (c == '"') {
+                state = STATE_STRING_MULTI; // Node 'f_m' (read '"""')
+            } else {
+                // Empty string "" followed by non-quote character
+                ungetc(c, source_file);
+                return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+            }
+            break;
+
+        case STATE_STRING: // Node 'STR'
+            if (c == '"') {
+                return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+            } else if (c == '\\') {
+                state = STATE_STRING_ESC; // Node 'f_esc'
+            } else if (c == '\n' || c == EOF) {
+                return lex_error(&buffer); // Unescaped LF or EOF -> lexical error 1
+            } else {
+                dynstr_append(&buffer, (char)c);
+            }
+            break;
+
+        case STATE_STRING_ESC: // Node 'f_esc'
+            if (c == '"') {
+                dynstr_append(&buffer, '"');
+            } else if (c == '\\') {
+                dynstr_append(&buffer, '\\');
+            } else if (c == 'n') {
+                dynstr_append(&buffer, '\n');
+            } else if (c == 'r') {
+                dynstr_append(&buffer, '\r');
+            } else if (c == 't') {
+                dynstr_append(&buffer, '\t');
+            } else {
+                // Illegal escape sequence in IFJ26 -> lexical error 1
+                return lex_error(&buffer);
+            }
+            state = STATE_STRING;
+            break;
+
+        case STATE_STRING_MULTI: // Node 'f_m'
+            if (c == '"') {
+                state = STATE_STRING_MULTI_Q1;
+            } else if (c == EOF) {
+                return lex_error(&buffer);
+            } else {
+                if (c == '\n') {
+                    current_line++;
+                }
+                dynstr_append(&buffer, (char)c);
+            }
+            break;
+
+        case STATE_STRING_MULTI_Q1:
+            if (c == '"') {
+                state = STATE_STRING_MULTI_Q2;
+            } else {
+                dynstr_append(&buffer, '"');
+                ungetc(c, source_file);
+                state = STATE_STRING_MULTI;
+            }
+            break;
+
+        case STATE_STRING_MULTI_Q2:
+            if (c == '"') {
+                return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+            } else {
+                dynstr_append(&buffer, '"');
+                dynstr_append(&buffer, '"');
+                ungetc(c, source_file);
+                state = STATE_STRING_MULTI;
             }
             break;
         }
