@@ -1,14 +1,24 @@
-# Makefile
 CC = gcc
-CFLAGS = -Wall -Wextra  -std=c11 -pedantic -g 
+CFLAGS = -Wall -Wextra -std=c11 -pedantic -g
 
-all :  scanner.o
+.PHONY: all clean format test
 
-scanner.o: scanner.c scanner.h
+all: ifj26
+
+ifj26: main.o scanner.o dynstr.o
+	$(CC) $(CFLAGS) main.o scanner.o dynstr.o -o ifj26
+
+main.o: main.c scanner.h
+	$(CC) $(CFLAGS) -c main.c -o main.o
+
+scanner.o: scanner.c scanner.h dynstr.h
 	$(CC) $(CFLAGS) -c scanner.c -o scanner.o
+
+dynstr.o: dynstr.c dynstr.h
+	$(CC) $(CFLAGS) -c dynstr.c -o dynstr.o
 
 format:
 	clang-format --style=LLVM -i *.c *.h
-	
+
 clean:
-	rm -f scanner.o
+	rm -f *.o ifj26
