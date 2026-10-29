@@ -171,6 +171,42 @@ static int emit_text(Token *token, DynStr *buf, Token_type type, int c) {
     ungetc(c, source_file);
     return make_token(token, type, dynstr_take(buf));
 }
+static int check_indent(Token *token, DynStr *buf, int c) {
+    if (saw_tab) {
+        return lex_error(buf);
+    }
+    at_line_start = false;
+    counting_indent = false;
+
+    int cur = indent_stack[indent_top];
+    if (line_indent == cur) {
+        return -1; // уровень отступа не изменился, продолжаем сканирование
+    }
+
+    if (line_indent > cur) {
+        if (indent_top + 1 >= MAX_INDENT_LEVELS) {
+            dynstr_free(buf);
+            return 99;
+        }
+        indent_stack[++indent_top] = line_indent;
+        ungetc(c, source_file);
+        return emit(token, buf, T_INDENT);
+    }
+
+    int count = 0;
+    while (indent_top > 0 && indent_stack[indent_top] > line_indent) {
+        indent_top--;
+        count++;
+    }
+
+    if (indent_stack[indent_top] != line_indent) {
+        return lex_error(buf);
+    }
+
+    pending_dedents = count - 1;
+    ungetc(c, source_file);
+    return emit(token, buf, T_DEDENT);
+}
 
 /* ---------- States of the automaton ---------- */
 
@@ -300,45 +336,12 @@ int get_token(Token *token) {
                 }
                 return make_token(token, T_EOF, NULL);
             }
-
             if (at_line_start && c != '/') {
-                if (saw_tab) {
-                    return lex_error(&buffer);
+                int res = check_indent(token, &buffer, c);
+                if (res != -1) {
+                    return res;
                 }
-    
-            at_line_start = false;
-            counting_indent = false;
-
-            int cur = indent_stack[indent_top];
-            if (line_indent > cur) {
-                if (indent_top + 1 >= MAX_INDENT_LEVELS) {
-                dynstr_free(&buffer);
-                return 99;
             }
-            indent_stack[++indent_top] = line_indent;
-        
-            ungetc(c, source_file);
-            dynstr_free(&buffer);
-            return make_token(token, T_INDENT, NULL);
-            }
-            if (line_indent < cur) {
-                int count = 0;
-                while (indent_top > 0 && indent_stack[indent_top] > line_indent) {
-                    indent_top--;
-                    count++;
-                }
-            if (indent_stack[indent_top] != line_indent) {
-                return lex_error(&buffer);
-            }
-
-            pending_dedents = count - 1;
-            ungetc(c, source_file);
-            dynstr_free(&buffer);
-            return make_token(token, T_DEDENT, NULL);
-         }
-    }
-
-
             //  identifiers or keywords starting with letters
             if (isalpha(c)) {
                 dynstr_append(&buffer, (char)c);
