@@ -290,7 +290,7 @@ int get_token(Token *token) {
                     eol_pending_at_eof = false;
                     return make_token(token, T_EOL, NULL);
                 }
-                // 2. Pop all remaining indents as T_DEDENT
+                //  Pop all remaining indents as T_DEDENT
                 if (indent_top > 0) {
                     pending_dedents = indent_top - 1;
                     indent_top = 0;
@@ -685,7 +685,7 @@ int get_token(Token *token) {
                 dynstr_free(&buffer);
                 return make_token(token, T_NEQ, NULL); // '!='
             } else {
-                // standalone '!' is forbidden in IFJ26 -> lexical error
+                // standalone '!' - lexical error
                 return lex_error(&buffer);
             }
             break;
@@ -759,7 +759,7 @@ int get_token(Token *token) {
             } else if (c == 't') {
                 dynstr_append(&buffer, '\t');
             } else {
-                // Illegal escape sequence in IFJ26 -> lexical error 1
+                // Illegal escape sequence- lexical error 1
                 return lex_error(&buffer);
             }
             state = STATE_STRING;
