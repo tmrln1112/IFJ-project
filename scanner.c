@@ -86,6 +86,19 @@ static int line_indent =0;
 static bool saw_tab = false;
 static bool counting_indent = true;
 
+// frees the text stored in a token
+void free_token(Token *token) {
+    if (token && token->attribute) {
+        free(token->attribute);
+        token->attribute = NULL;
+    }
+}
+static void reset_line_state(void) {
+    at_line_start = true;
+    line_indent = 0;
+    saw_tab = false;
+    counting_indent = true;
+}
 // initializes the scanner module with input stream reference
 void scanner_init(FILE *source) {
     source_file = source;
@@ -94,20 +107,9 @@ void scanner_init(FILE *source) {
     indent_top = 0;
     indent_stack[0] = 0; // base indent level 0
     pending_dedents = 0;
-    at_line_start = true;
     eol_pending_at_eof = false;
-    line_indent =0;
-    saw_tab = false;
-    counting_indent = true;
+    reset_line_state();
 
-}
-
-// frees the text stored in a token
-void free_token(Token *token) {
-    if (token && token->attribute) {
-        free(token->attribute);
-        token->attribute = NULL;
-    }
 }
 /* ---------- Helpers ---------- */
 
@@ -169,6 +171,7 @@ static int emit_text(Token *token, DynStr *buf, Token_type type, int c) {
     ungetc(c, source_file);
     return make_token(token, type, dynstr_take(buf));
 }
+
 /* ---------- States of the automaton ---------- */
 
 typedef enum {
@@ -271,17 +274,12 @@ int get_token(Token *token) {
                 }
                 if (at_line_start){
                     current_line++;
-                    line_indent = 0;
-                    saw_tab = false;
-                    counting_indent = true;
+                    reset_line_state();
                     break;
                 }
                 int result = make_token(token, T_EOL, NULL);
                 current_line++;
-                at_line_start = true; // Next call will evaluate indent
-                line_indent = 0;
-                saw_tab = false;
-                counting_indent = true;
+                reset_line_state();
                 dynstr_free(&buffer);
                 return result;
             }
