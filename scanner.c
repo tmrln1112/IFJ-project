@@ -165,10 +165,17 @@ static int make_token(Token *token, Token_type type, char *attr) {
     }
     return 0; 
 }
-// Frees the buffer and returns a token without text attribute
+// frees the buffer and returns a token without text 
 static int emit(Token *token, DynStr *buf, Token_type type) {
     dynstr_free(buf);
     return make_token(token, type, NULL);
+}
+//'=' '<' '>': with a following '=' it is a two-char token, otherwise a one-char token
+static int emit_pair(Token *token, DynStr *buf, int c, Token_type with_eq, Token_type alone) {
+    if (c != '=') {
+        ungetc(c, source_file);
+    }
+    return emit(token, buf, c == '=' ? with_eq : alone);
 }
 /* ---------- States of the automaton ---------- */
 
@@ -666,13 +673,7 @@ int get_token(Token *token) {
 
         /* ---------- Comparison & Assignment operators ---------- */
         case STATE_ASSIGN:
-            if (c == '=') {
-               return emit(token, &buffer, T_EQ); // '=='
-            } else {
-                ungetc(c, source_file);
-                return emit(token, &buffer, T_ASSIGN); // '='
-            }
-            break;
+            return emit_pair(token, &buffer, c, T_EQ, T_ASSIGN);
 
         case STATE_EXCLAM:
             if (c == '=') {
@@ -684,22 +685,11 @@ int get_token(Token *token) {
             break;
 
         case STATE_LESS:
-            if (c == '=') {
-                return emit(token, &buffer, T_LESS_OR_EQ); // '<='
-            } else {
-                ungetc(c, source_file);
-                return emit(token, &buffer, T_LESS_T); // '<'
-            }
-            break;
+            return emit_pair(token, &buffer, c, T_LESS_OR_EQ, T_LESS_T);
 
         case STATE_GREATER:
-            if (c == '=') {
-                return emit(token, &buffer, T_GREATER_OR_EQ); // '>='
-            } else {
-                ungetc(c, source_file);
-                return emit(token, &buffer, T_GREATER_T); // '>'
-            }
-            break;
+           return emit_pair(token, &buffer, c, T_GREATER_OR_EQ, T_GREATER_T);
+           
             /* ---------- String states (f1, f2, STR, f_esc, f_m) ---------- */
         case STATE_STRING_START: // Node 'f1'
             if (c == '"') {
