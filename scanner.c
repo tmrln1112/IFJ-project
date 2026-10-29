@@ -78,10 +78,7 @@ static int paren_depth = 0;      // nesting level of parentheses ()
 #define MAX_INDENT_LEVELS 100
 static int indent_stack[MAX_INDENT_LEVELS];
 static int indent_top = 0;         // stack pointer
-static int pending_dedents = 0;    // number of pending DEDENT tokens
 static bool at_line_start = true;  // flag indicating start of a new line
-static bool eol_pending_at_eof = false; // pending T_EOL before EOF
-
 static int line_indent =0;
 static bool saw_tab = false;
 static bool counting_indent = true;
@@ -106,8 +103,6 @@ void scanner_init(FILE *source) {
     paren_depth = 0;
     indent_top = 0;
     indent_stack[0] = 0; // base indent level 0
-    pending_dedents = 0;
-    eol_pending_at_eof = false;
     reset_line_state();
 
 }
@@ -147,11 +142,6 @@ static int make_token(Token *token, Token_type type, char *attr) {
     token->type = type;
     token->attribute = attr; // NULL when the token carries no text
     token->line = current_line;
-    if (type != T_EOL && type != T_INDENT && type != T_DEDENT && type != T_EOF) {
-        eol_pending_at_eof = true;
-    } else if (type == T_EOL) {
-        eol_pending_at_eof = false;
-    }
     return 0; 
 }
 // frees the buffer and returns a token without text 
@@ -175,39 +165,30 @@ static int check_indent(Token *token, DynStr *buf, int c) {
     if (saw_tab) {
         return lex_error(buf);
     }
-    at_line_start = false;
-    counting_indent = false;
-
-    int cur = indent_stack[indent_top];
-    if (line_indent == cur) {
-        return -1; // уровень отступа не изменился, продолжаем сканирование
+    int top = indent_stack[indent_top];
+    if (line_indent == top) {
+        at_line_start = false;
+        counting_indent = false;
+        return -1;
     }
-
-    if (line_indent > cur) {
+    Token_type type;
+    if (line_indent > top) {
         if (indent_top + 1 >= MAX_INDENT_LEVELS) {
             dynstr_free(buf);
             return 99;
         }
         indent_stack[++indent_top] = line_indent;
-        ungetc(c, source_file);
-        return emit(token, buf, T_INDENT);
-    }
-
-    int count = 0;
-    while (indent_top > 0 && indent_stack[indent_top] > line_indent) {
+        type = T_INDENT;
+    } else {
+        if (indent_stack[indent_top - 1] < line_indent) { // lands between two levels
+            return lex_error(buf);
+        }
         indent_top--;
-        count++;
+        type = T_DEDENT;
     }
-
-    if (indent_stack[indent_top] != line_indent) {
-        return lex_error(buf);
-    }
-
-    pending_dedents = count - 1;
     ungetc(c, source_file);
-    return emit(token, buf, T_DEDENT);
+    return emit(token, buf, type);
 }
-
 /* ---------- States of the automaton ---------- */
 
 typedef enum {
@@ -265,11 +246,6 @@ int get_token(Token *token) {
     }
     token->attribute = NULL;
 
-    // Return pending DEDENT tokens if any remain
-    if (pending_dedents > 0) {
-        pending_dedents--;
-        return make_token(token, T_DEDENT, NULL);
-    }
     DynStr buffer;
     if (!dynstr_init(&buffer)) {
         return 99; // out of memory
@@ -322,19 +298,15 @@ int get_token(Token *token) {
 
             //  end of file token
             if (c == EOF) {
-                dynstr_free(&buffer);
-                // If line wasn't terminated with \n, emit pending T_EOL first
-                if (eol_pending_at_eof) {
-                    eol_pending_at_eof = false;
-                    return make_token(token, T_EOL, NULL);
+                if (!at_line_start) { // last line had no '\n': close it with EOL
+                    reset_line_state();
+                    return emit(token, &buffer, T_EOL);
                 }
-                //  Pop all remaining indents as T_DEDENT
-                if (indent_top > 0) {
-                    pending_dedents = indent_top - 1;
-                    indent_top = 0;
-                    return make_token(token, T_DEDENT, NULL);
+                if (indent_top > 0) { // close open blocks, one DEDENT per call
+                    indent_top--;
+                    return emit(token, &buffer, T_DEDENT);
                 }
-                return make_token(token, T_EOF, NULL);
+                return emit(token, &buffer, T_EOF);
             }
             if (at_line_start && c != '/') {
                 int res = check_indent(token, &buffer, c);
