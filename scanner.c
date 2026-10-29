@@ -165,6 +165,11 @@ static int make_token(Token *token, Token_type type, char *attr) {
     }
     return 0; 
 }
+// Frees the buffer and returns a token without text attribute
+static int emit(Token *token, DynStr *buf, Token_type type) {
+    dynstr_free(buf);
+    return make_token(token, type, NULL);
+}
 /* ---------- States of the automaton ---------- */
 
 typedef enum {
@@ -408,33 +413,25 @@ int get_token(Token *token) {
             //  single-character operators and delimiters
             switch (c) {
             case '+':
-                dynstr_free(&buffer);
-                return make_token(token, T_PLUS, NULL);
+                return emit(token, &buffer, T_PLUS);
             case '-':
-                dynstr_free(&buffer);
-                return make_token(token, T_MINUS, NULL);
+               return emit(token, &buffer, T_MINUS);
             case '*':
-                dynstr_free(&buffer);
-                return make_token(token, T_MUL, NULL);
+                return emit(token, &buffer, T_MUL);
             case '(':
                 paren_depth++;
-                dynstr_free(&buffer);
-                return make_token(token, T_LPAR, NULL);
+                return emit(token, &buffer, T_LPAR);
             case ')':
                 if (paren_depth > 0) {
                     paren_depth--;
                 }
-                dynstr_free(&buffer);
-                return make_token(token, T_RPAR, NULL);
+                return emit(token, &buffer, T_RPAR);
             case ',':
-                dynstr_free(&buffer);
-                return make_token(token, T_COMMA, NULL);
+                return emit(token, &buffer, T_COMMA);
             case ':':
-                dynstr_free(&buffer);
-                return make_token(token, T_COLON, NULL);
+                return emit(token, &buffer, T_COLON);
             case ';':
-                dynstr_free(&buffer);
-                return make_token(token, T_SEMICOLON, NULL);
+                return emit(token, &buffer, T_SEMICOLON);
             default:
                 // a character that doesn't belong to the language
                 return lex_error(&buffer);
@@ -610,9 +607,8 @@ int get_token(Token *token) {
             } else {
                 // single '/' -> division operator
                 ungetc(c, source_file);
-                dynstr_free(&buffer);
                 at_line_start = false;
-                return make_token(token, T_DIV, NULL);
+                return emit(token, &buffer, T_DIV);
             }
             break;
 
@@ -671,19 +667,16 @@ int get_token(Token *token) {
         /* ---------- Comparison & Assignment operators ---------- */
         case STATE_ASSIGN:
             if (c == '=') {
-                dynstr_free(&buffer);
-                return make_token(token, T_EQ, NULL); // '=='
+               return emit(token, &buffer, T_EQ); // '=='
             } else {
                 ungetc(c, source_file);
-                dynstr_free(&buffer);
-                return make_token(token, T_ASSIGN, NULL); // '='
+                return emit(token, &buffer, T_ASSIGN); // '='
             }
             break;
 
         case STATE_EXCLAM:
             if (c == '=') {
-                dynstr_free(&buffer);
-                return make_token(token, T_NEQ, NULL); // '!='
+                return emit(token, &buffer, T_NEQ); // '!='
             } else {
                 // standalone '!' - lexical error
                 return lex_error(&buffer);
@@ -692,23 +685,19 @@ int get_token(Token *token) {
 
         case STATE_LESS:
             if (c == '=') {
-                dynstr_free(&buffer);
-                return make_token(token, T_LESS_OR_EQ, NULL); // '<='
+                return emit(token, &buffer, T_LESS_OR_EQ); // '<='
             } else {
                 ungetc(c, source_file);
-                dynstr_free(&buffer);
-                return make_token(token, T_LESS_T, NULL); // '<'
+                return emit(token, &buffer, T_LESS_T); // '<'
             }
             break;
 
         case STATE_GREATER:
             if (c == '=') {
-                dynstr_free(&buffer);
-                return make_token(token, T_GREATER_OR_EQ, NULL); // '>='
+                return emit(token, &buffer, T_GREATER_OR_EQ); // '>='
             } else {
                 ungetc(c, source_file);
-                dynstr_free(&buffer);
-                return make_token(token, T_GREATER_T, NULL); // '>'
+                return emit(token, &buffer, T_GREATER_T); // '>'
             }
             break;
             /* ---------- String states (f1, f2, STR, f_esc, f_m) ---------- */
@@ -801,8 +790,7 @@ int get_token(Token *token) {
         case STATE_AT:
             if (c == 'm' && fgetc(source_file) == 'a' &&
                 fgetc(source_file) == 'i' && fgetc(source_file) == 'n') {
-                dynstr_free(&buffer);
-                return make_token(token, T_AT_MAIN, NULL);
+                return emit(token, &buffer, T_AT_MAIN);
             }
             return lex_error(&buffer);
         }
