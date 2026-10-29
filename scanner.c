@@ -177,6 +177,11 @@ static int emit_pair(Token *token, DynStr *buf, int c, Token_type with_eq, Token
     }
     return emit(token, buf, c == '=' ? with_eq : alone);
 }
+// ends a token whose last read character c is not part of it (returns c to stream and takes buffer text)
+static int emit_text(Token *token, DynStr *buf, Token_type type, int c) {
+    ungetc(c, source_file);
+    return make_token(token, type, dynstr_take(buf));
+}
 /* ---------- States of the automaton ---------- */
 
 typedef enum {
@@ -488,8 +493,7 @@ int get_token(Token *token) {
                 return lex_error(&buffer);
             } else {
                 // return simple "0" integer token
-                ungetc(c, source_file);
-                return make_token(token, T_LIT_INT, dynstr_take(&buffer));
+                return emit_text(token, &buffer, T_LIT_INT, c);
             }
             break;
 
@@ -507,8 +511,7 @@ int get_token(Token *token) {
                 state = STATE_EXP;
             } else {
                 // end of the integer, give the extra character back
-                ungetc(c, source_file);
-                return make_token(token, T_LIT_INT, dynstr_take(&buffer));
+                return emit_text(token, &buffer, T_LIT_INT, c);
             }
             break;
 
@@ -544,8 +547,7 @@ int get_token(Token *token) {
                // optional suffix: it belongs to the number, so nothing to put back
                 return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
             } else {
-                ungetc(c, source_file);
-                return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
+                return emit_text(token, &buffer, T_LIT_DOUBLE, c);
             }
             break;
 
@@ -590,8 +592,7 @@ int get_token(Token *token) {
                // optional suffix, same as in STATE_DOUBLE
                 return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
             } else {
-                ungetc(c, source_file);
-                return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
+                return emit_text(token, &buffer, T_LIT_DOUBLE, c);
             }
             break;
 
@@ -689,7 +690,7 @@ int get_token(Token *token) {
 
         case STATE_GREATER:
            return emit_pair(token, &buffer, c, T_GREATER_OR_EQ, T_GREATER_T);
-           
+
             /* ---------- String states (f1, f2, STR, f_esc, f_m) ---------- */
         case STATE_STRING_START: // Node 'f1'
             if (c == '"') {
@@ -709,8 +710,7 @@ int get_token(Token *token) {
                 state = STATE_STRING_MULTI; // Node 'f_m' (read '"""')
             } else {
                 // Empty string "" followed by non-quote character
-                ungetc(c, source_file);
-                return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+                return emit_text(token, &buffer, T_LIT_STRING, c);
             }
             break;
 
