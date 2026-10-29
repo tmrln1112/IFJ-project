@@ -113,37 +113,24 @@ void free_token(Token *token) {
 
 // checks whether a word is a reserved keyword
 // returns the keyword's token type, or T_ID
-static Token_type check_keyword(const char *str) {
-    if (strcmp(str, "def") == 0)
-        return T_DEF;
-    if (strcmp(str, "do") == 0)
-        return T_DO;
-    if (strcmp(str, "Double") == 0)
-        return T_DOUBLE;
-    if (strcmp(str, "else") == 0)
-        return T_ELSE;
-    if (strcmp(str, "if") == 0)
-        return T_IF;
-    if (strcmp(str, "import") == 0)
-        return T_IMPORT;
-    if (strcmp(str, "Int") == 0)
-        return T_INT;
-    if (strcmp(str, "return") == 0)
-        return T_RETURN;
-    if (strcmp(str, "String") == 0)
-        return T_STRING;
-    if (strcmp(str, "then") == 0)
-        return T_THEN;
-    if (strcmp(str, "Unit") == 0)
-        return T_UNIT;
-    if (strcmp(str, "val") == 0)
-        return T_VAL;
-    if (strcmp(str, "var") == 0)
-        return T_VAR;
-    if (strcmp(str, "while") == 0)
-        return T_WHILE;
+static const struct {
+    const char *word;
+    Token_type type;
+} keywords[] = {
+    {"def", T_DEF},       {"do", T_DO},         {"Double", T_DOUBLE}, 
+    {"else", T_ELSE},     {"if", T_IF},         {"import", T_IMPORT}, 
+    {"Int", T_INT},       {"return", T_RETURN}, {"String", T_STRING}, 
+    {"then", T_THEN},     {"Unit", T_UNIT},     {"val", T_VAL}, 
+    {"var", T_VAR},       {"while", T_WHILE},
+};
 
-    return T_ID; 
+static Token_type check_keyword(const char *str) {
+    for (size_t i = 0; i < sizeof(keywords) / sizeof(keywords[0]); i++) {
+        if (strcmp(str, keywords[i].word) == 0) {
+            return keywords[i].type;
+        }
+    }
+    return T_ID;
 }
 
 // reports a lexical error to stderr, cleans up and returns error code 1.
