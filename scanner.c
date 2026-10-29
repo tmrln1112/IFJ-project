@@ -71,11 +71,35 @@ static void dynstr_free(DynStr *s) {
 /* ---------- Scanner state ---------- */
 static FILE *source_file = NULL; // where we read the source code from
 static int current_line = 1;  // line we are on now, used in error messages
+/* ---------- Parentheses nesting ---------- */
+static int paren_depth = 0;      // nesting level of parentheses ()
+
+/* ---------- Indentation handling (INDENT / DEDENT) ---------- */
+#define MAX_INDENT_LEVELS 100
+static int indent_stack[MAX_INDENT_LEVELS];
+static int indent_top = 0;         // stack pointer
+static int pending_dedents = 0;    // number of pending DEDENT tokens
+static bool at_line_start = true;  // flag indicating start of a new line
+static bool eol_pending_at_eof = false; // pending T_EOL before EOF
+
+static int line_indent =0;
+static bool saw_tab = false;
+static bool counting_indent = true;
 
 // initializes the scanner module with input stream reference
 void scanner_init(FILE *source) {
     source_file = source;
     current_line = 1;
+    paren_depth = 0;
+    indent_top = 0;
+    indent_stack[0] = 0; // base indent level 0
+    pending_dedents = 0;
+    at_line_start = true;
+    eol_pending_at_eof = false;
+    line_indent =0;
+    saw_tab = false;
+    counting_indent = true;
+
 }
 
 // frees the text stored in a token
@@ -134,6 +158,11 @@ static int make_token(Token *token, Token_type type, char *attr) {
     token->type = type;
     token->attribute = attr; // NULL when the token carries no text
     token->line = current_line;
+    if (type != T_EOL && type != T_INDENT && type != T_DEDENT && type != T_EOF) {
+        eol_pending_at_eof = true;
+    } else if (type == T_EOL) {
+        eol_pending_at_eof = false;
+    }
     return 0; 
 }
 /* ---------- States of the automaton ---------- */
@@ -174,7 +203,9 @@ typedef enum {
     STATE_STRING_ESC,        // Node 'f_esc' (read '\' inside single-line string)
     STATE_STRING_MULTI,      // Node 'f_m' (inside """ multi-line string)
     STATE_STRING_MULTI_Q1,   // Helper for closing multi-line string (read 1st closing '"')
-    STATE_STRING_MULTI_Q2    // Helper for closing multi-line string (read 2nd closing '"')
+    STATE_STRING_MULTI_Q2,    // Helper for closing multi-line string (read 2nd closing '"')
+
+    STATE_AT
 } State;
 
 /* ---------- Main function ---------- */
@@ -191,14 +222,20 @@ int get_token(Token *token) {
     }
     token->attribute = NULL;
 
-    State state = STATE_START;
-    int c;
-    int comment_depth = 0;
-
+    // Return pending DEDENT tokens if any remain
+    if (pending_dedents > 0) {
+        pending_dedents--;
+        return make_token(token, T_DEDENT, NULL);
+    }
     DynStr buffer;
     if (!dynstr_init(&buffer)) {
         return 99; // out of memory
     }
+    // Process indentation at the beginning of a line
+   
+    State state = STATE_START;
+    int c;
+    int comment_depth = 0;
 
     while (1) {
         c = fgetc(source_file);
@@ -206,23 +243,99 @@ int get_token(Token *token) {
         switch (state) {
         case STATE_START:
             //  skip whitespaces between tokens
-            if (c == ' ' || c == '\t' || c == '\r') {
+            if (c == ' '){
+                if (at_line_start && counting_indent){
+                    line_indent++;
+                }
+                break;
+            }
+            if (c == '\t'){
+                if (at_line_start && counting_indent) {
+                    saw_tab = true;
+                }
+                break;
+            }
+            if (c == '\r') {
                 break;
             }
 
-            //  track newlines and return T_EOL token
+           // track newlines, set line start flag and return T_EOL token
             if (c == '\n') {
-                dynstr_free(&buffer);
+                if (paren_depth > 0){
+                    current_line++;
+                    break;
+                }
+                if (at_line_start){
+                    current_line++;
+                    line_indent = 0;
+                    saw_tab = false;
+                    counting_indent = true;
+                    break;
+                }
                 int result = make_token(token, T_EOL, NULL);
-                current_line++; // only after the token got its own line number
+                current_line++;
+                at_line_start = true; // Next call will evaluate indent
+                line_indent = 0;
+                saw_tab = false;
+                counting_indent = true;
+                dynstr_free(&buffer);
                 return result;
             }
 
             //  end of file token
             if (c == EOF) {
                 dynstr_free(&buffer);
+                // If line wasn't terminated with \n, emit pending T_EOL first
+                if (eol_pending_at_eof) {
+                    eol_pending_at_eof = false;
+                    return make_token(token, T_EOL, NULL);
+                }
+                // 2. Pop all remaining indents as T_DEDENT
+                if (indent_top > 0) {
+                    pending_dedents = indent_top - 1;
+                    indent_top = 0;
+                    return make_token(token, T_DEDENT, NULL);
+                }
                 return make_token(token, T_EOF, NULL);
             }
+
+            if (at_line_start && c != '/') {
+                if (saw_tab) {
+                    return lex_error(&buffer);
+                }
+    
+            at_line_start = false;
+            counting_indent = false;
+
+            int cur = indent_stack[indent_top];
+            if (line_indent > cur) {
+                if (indent_top + 1 >= MAX_INDENT_LEVELS) {
+                dynstr_free(&buffer);
+                return 99;
+            }
+            indent_stack[++indent_top] = line_indent;
+        
+            ungetc(c, source_file);
+            dynstr_free(&buffer);
+            return make_token(token, T_INDENT, NULL);
+            }
+            if (line_indent < cur) {
+                int count = 0;
+                while (indent_top > 0 && indent_stack[indent_top] > line_indent) {
+                    indent_top--;
+                    count++;
+                }
+            if (indent_stack[indent_top] != line_indent) {
+                return lex_error(&buffer);
+            }
+
+            pending_dedents = count - 1;
+            ungetc(c, source_file);
+            dynstr_free(&buffer);
+            return make_token(token, T_DEDENT, NULL);
+         }
+    }
+
 
             //  identifiers or keywords starting with letters
             if (isalpha(c)) {
@@ -260,6 +373,9 @@ int get_token(Token *token) {
             }
 
             if (c == '/') {
+                if (at_line_start) {
+                    counting_indent = false; 
+                }
                 state = STATE_SLASH;
                 break;
             }
@@ -283,6 +399,10 @@ int get_token(Token *token) {
                 state = STATE_STRING_START; 
                 break;
             }
+            if (c == '@') {
+                state = STATE_AT;
+                break;
+            }
             
 
             //  single-character operators and delimiters
@@ -297,9 +417,13 @@ int get_token(Token *token) {
                 dynstr_free(&buffer);
                 return make_token(token, T_MUL, NULL);
             case '(':
+                paren_depth++;
                 dynstr_free(&buffer);
                 return make_token(token, T_LPAR, NULL);
             case ')':
+                if (paren_depth > 0) {
+                    paren_depth--;
+                }
                 dynstr_free(&buffer);
                 return make_token(token, T_RPAR, NULL);
             case ',':
@@ -487,17 +611,16 @@ int get_token(Token *token) {
                 // single '/' -> division operator
                 ungetc(c, source_file);
                 dynstr_free(&buffer);
+                at_line_start = false;
                 return make_token(token, T_DIV, NULL);
             }
             break;
 
         case STATE_LINE_COMMENT:
             if (c == '\n' || c == EOF) {
-                // end of line comment: unget character so STATE_START processes T_EOL / T_EOF
-                ungetc(c, source_file);
+               ungetc(c, source_file);
                 state = STATE_START;
             }
-            // ignore all other characters inside line comment
             break;
 
         case STATE_BLOCK_COMMENT:
@@ -675,6 +798,13 @@ int get_token(Token *token) {
                 state = STATE_STRING_MULTI;
             }
             break;
+        case STATE_AT:
+            if (c == 'm' && fgetc(source_file) == 'a' &&
+                fgetc(source_file) == 'i' && fgetc(source_file) == 'n') {
+                dynstr_free(&buffer);
+                return make_token(token, T_AT_MAIN, NULL);
+            }
+            return lex_error(&buffer);
         }
     }
 }
