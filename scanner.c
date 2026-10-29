@@ -11,66 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "dynstr.h"
 
-// Dynamic expandable string buffer for storing token attributes of arbitrary length
-typedef struct {
-    char *data;      // Pointer to the dynamically allocated character array
-    size_t length;   // Current number of characters stored (excluding '\0')
-    size_t capacity; // Total allocated memory capacity in bytes
-} DynStr;
-
-static void fatal_oom(void) {
-    fprintf(stderr, "Memory allocation failed\n");
-    exit(99);
-}
-
-//  Creates an empty buffer. Returns false if malloc fails.
-static void dynstr_init(DynStr *s) {
-    s->capacity = 32;
-    s->length = 0;
-    s->data = malloc(s->capacity);
-    if (!s->data) {
-        fatal_oom();
-    }
-    s->data[0] = '\0';
-}
-
-// Adds one character to the end. When the buffer is full, it doubles in size.
-static void dynstr_append(DynStr *s, char c) {
-    if (s->length + 2 > s->capacity) { // reserve extra space for null terminator
-        size_t new_cap = s->capacity * 2;
-        char *new_data = realloc(s->data, new_cap);
-        if (!new_data){
-           fatal_oom();
-        }
-        s->data = new_data;
-        s->capacity = new_cap;
-    }
-    s->data[s->length] = c;
-    s->length++;
-    s->data[s->length] = '\0';
-}
-
-// Hands the collected text over to the caller (we use it as token->attribute).
-// After this the buffer is empty and the caller is responsible for free().
-
-static char *dynstr_take(DynStr *s) {
-    char *result = s->data;
-    s->data = NULL;
-    s->length = 0;
-    s->capacity = 0;
-    return result;
-}
-
-// Releases the buffer. Safe to call even if it was already taken or freed.
-static void dynstr_free(DynStr *s) {
-    if (s->data) {
-        free(s->data);
-        s->data = NULL;
-    }
-    s->length = 0;
-    s->capacity = 0;
-}
 /* ---------- Scanner state ---------- */
 static FILE *source_file = NULL; // where we read the source code from
 static int current_line = 1;  // line we are on now, used in error messages
@@ -177,7 +119,8 @@ static int check_indent(Token *token, DynStr *buf, int c) {
     Token_type type;
     if (line_indent > top) {
         if (indent_top + 1 >= MAX_INDENT_LEVELS) {
-            fatal_oom();
+            fprintf(stderr, "Internal error: Indentation stack overflow\n");
+            exit(99);
         }
         indent_stack[++indent_top] = line_indent;
         type = T_INDENT;
