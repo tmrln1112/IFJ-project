@@ -147,6 +147,7 @@ typedef enum {
     STATE_INT_UNDERSCORE,    // read '_' in an integer, a digit must follow
     /* ---------- Double states ---------- */
     STATE_DOT,               // read '.', at least one digit must follow
+    STATE_INT_DOT,
     STATE_DOUBLE,            // processing Double fractional digits
     STATE_DOUBLE_UNDERSCORE, // read '_' in Double fractional part
     STATE_EXP,               // read 'e' or 'E', expecting a sign or a digit
@@ -288,7 +289,7 @@ int get_token(Token *token) {
 
             //  a Double may start with a dot, e.g. ".5"
             if (c == '.') {
-                dynstr_append(&buffer, (char)c);
+                dynstr_append(&buffer, '.');
                 state = STATE_DOT;
                 break;
             }
@@ -388,7 +389,7 @@ int get_token(Token *token) {
         case STATE_ZERO:
             if (c == '.') {
                 dynstr_append(&buffer, (char)c);
-                state = STATE_DOT;
+                state = STATE_INT_DOT;
             } else if (c == 'e' || c == 'E') {
                 dynstr_append(&buffer, (char)c);
                 state = STATE_EXP;
@@ -409,7 +410,7 @@ int get_token(Token *token) {
                 state = STATE_INT_UNDERSCORE;
             } else if (c == '.') {
                 dynstr_append(&buffer, (char)c);
-                state = STATE_DOT;
+                state = STATE_INT_DOT;
             } else if (c == 'e' || c == 'E') {
                 dynstr_append(&buffer, (char)c);
                 state = STATE_EXP;
@@ -435,9 +436,19 @@ int get_token(Token *token) {
                 dynstr_append(&buffer, (char)c);
                 state = STATE_DOUBLE;
             } else {
-                return lex_error(&buffer);
+                ungetc(c, source_file);
+                return emit(token, &buffer, T_DOT);
             }
             break;
+        
+        case STATE_INT_DOT:
+            if (isdigit(c)) {
+            dynstr_append(&buffer, (char)c);
+            state = STATE_DOUBLE;
+        } else {
+            return lex_error(&buffer);
+        }
+        break;
 
         case STATE_DOUBLE:
             if (isdigit(c)) {
