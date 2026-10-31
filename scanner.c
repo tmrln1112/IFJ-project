@@ -16,6 +16,7 @@
 /* ---------- Scanner state ---------- */
 static FILE *source_file = NULL; // Input file
 static int current_line = 1;     // Current line number
+static int token_start_line = 1; // Line number where current token started
 /* ---------- Parentheses nesting ---------- */
 static int paren_depth = 0; // Nesting level of parentheses ()
 
@@ -318,6 +319,7 @@ int get_token(Token *token) {
         break;
       }
       if (c == '"') {
+        token_start_line = current_line;
         state = STATE_STRING_START;
         break;
       }
@@ -675,7 +677,9 @@ int get_token(Token *token) {
 
     case STATE_STRING_MULTI_Q2:
       if (c == '"') {
-        return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+        int res = make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+        token->line = token_start_line;
+        return res;
       } else {
         dynstr_append(&buffer, '"');
         dynstr_append(&buffer, '"');
