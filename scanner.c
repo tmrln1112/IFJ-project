@@ -161,6 +161,7 @@ typedef enum {
   STATE_LINE_COMMENT,        // Line comment //
   STATE_BLOCK_COMMENT,       // Block comment /*
   STATE_BLOCK_COMMENT_SLASH, // '/' inside block comment
+  STATE_COMMENT_NL_REST,     // after a block comment that contained LF
   STATE_BLOCK_COMMENT_END,   // '*' inside block comment
   /* ---------- Operators & Assignment states ---------- */
   STATE_ASSIGN,  // '=' read
@@ -201,6 +202,7 @@ int get_token(Token *token) {
   State state = STATE_START;
   int c;
   int comment_depth = 0;
+  bool comment_had_nl = false;
 
   while (1) {
     c = fgetc(source_file);
@@ -491,7 +493,6 @@ int get_token(Token *token) {
         return lex_error(&buffer); // e.g. "1e+"
       }
       break;
-
     case STATE_EXP_DIGIT:
       if (isdigit(c)) {
         dynstr_append(&buffer, (char)c);
@@ -543,6 +544,7 @@ int get_token(Token *token) {
         state = STATE_BLOCK_COMMENT_SLASH;
       } else if (c == '\n') {
         current_line++; // Track line numbers inside block comment
+        comment_had_nl = true;
       } else if (c == EOF) {
         return lex_error(&buffer);
       }
@@ -561,11 +563,12 @@ int get_token(Token *token) {
     case STATE_BLOCK_COMMENT_END:
       if (c == '/') {
         comment_depth--;
-        if (comment_depth == 0) {
-          state = STATE_START;
-        } else {
+        if (comment_depth > 0) {
           state = STATE_BLOCK_COMMENT;
+        } else {
+          state = comment_had_nl ? STATE_COMMENT_NL_REST : STATE_START;
         }
+
         // Closing block comment */ -> return to START
       } else if (c == '*') {
         // Stay in END state to handle consecutive asterisks (e.g. '***')
@@ -573,12 +576,23 @@ int get_token(Token *token) {
       } else {
         if (c == '\n') {
           current_line++;
+          comment_had_nl = true;
         } else if (c == EOF) {
           return lex_error(&buffer);
         }
         state = STATE_BLOCK_COMMENT;
       }
       break;
+    case STATE_COMMENT_NL_REST:
+      if (c == ' ' || c == '\t' || c == '\r') {
+        break; // only whitespace may follow
+      }
+      if (c == '\n' || c == EOF) {
+        ungetc(c, source_file); // let STATE_START handle EOL / EOF
+        state = STATE_START;
+        break;
+      }
+      return lex_error(&buffer); // a token after such a comment
 
     /* ---------- Comparison & Assignment operators ---------- */
     case STATE_ASSIGN:
@@ -590,7 +604,6 @@ int get_token(Token *token) {
       } else {
         return lex_error(&buffer); // Standalone '!' - lexical error
       }
-      break;
 
     case STATE_LESS:
       return emit_pair(token, &buffer, c, T_LESS_OR_EQ, T_LESS_T);
@@ -688,8 +701,14 @@ int get_token(Token *token) {
       }
       break;
     case STATE_AT:
-      if (c == 'm' && fgetc(source_file) == 'a' && fgetc(source_file) == 'i' &&
-          fgetc(source_file) == 'n') {
+      // Alphanumeric or underscore
+      if (isalnum(c) || c == '_') {
+        dynstr_append(&buffer, (char)c);
+        break;
+      }
+      ungetc(c, source_file);                 // Return the extra character
+      if (strcmp(buffer.data, "main") == 0) { // Check if the attribute is
+                                              // "main"
         return emit(token, &buffer, T_AT_MAIN);
       }
       return lex_error(&buffer);
