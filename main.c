@@ -1,3 +1,5 @@
+/*Author <xkotliy00> Yaryna Kotliarenko
+ */
 #include <stdio.h>
 #include "scanner.h"
 
@@ -47,33 +49,26 @@ const char *token_type_to_string(Token_type type) {
 }
 
 int main(void) {
-    FILE *f = fopen("test.ifj", "r");
-    if (!f) {
-        perror("Failed to open test.ifj");
-        return 99;
+  scanner_init(stdin);
+
+  Token token;
+  int result;
+
+  while ((result = get_token(&token)) == 0) {
+    printf("Line %d | Token: %-15s | Attr: %s\n", token.line,
+           token_type_to_string(token.type),
+           token.attribute ? token.attribute : "NULL");
+    if (token.type == T_EOF) {
+      free_token(&token);
+      break;
     }
+    free_token(&token);
+  }
 
-    scanner_init(f);
-
-    Token token;
-    int result;
-
-    printf("--- SCANNER TEST START ---\n");
-    while ((result = get_token(&token)) == 0) {
-        printf("Line %d | Token: %-15s | Attr: %s\n", 
-               token.line, token_type_to_string(token.type), token.attribute ? token.attribute : "NULL");
-        if (token.type == T_EOF) {
-            free_token(&token);
-            break;
-        }
-        free_token(&token);
-    }
-
-    if (result != 0) {
-        printf("-- LEXICAL ERROR OCCURRED! Error code: %d\n", result);
-    }
-    printf("--- SCANNER TEST END ---\n");
-
-    fclose(f);
-    return 0;
+  if (result != 0) {
+    fprintf(stderr, "LEXICAL ERROR\n");
+    return 1;
+  }
+  return 0;
 }
+    
