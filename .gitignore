@@ -1,0 +1,7 @@
+*.o
+*.zip
+.DS_Store
+__MACOSX/
+.vscode/
+*.dSYM/
+/ifj26
