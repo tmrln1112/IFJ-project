@@ -46,6 +46,18 @@ typedef enum {
   T_VAR,
   T_WHILE,
 
+  // keywords from extensions (BOOLTHEN, CONTROL) and reserved words
+  T_BOOLEAN,
+  T_TRUE,
+  T_FALSE,
+  T_CASE,
+  T_CLASS,
+  T_EXTENSION,
+  T_FOR,
+  T_LIST, // reserved only, LISTS extension is not implemented
+  T_MATCH,
+  T_TYPE,
+
   // operators
   T_PLUS,          // plus
   T_MINUS,         // minus

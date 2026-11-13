@@ -58,11 +58,31 @@ static const struct {
   const char *word;
   Token_type type;
 } keywords[] = {
-    {"def", T_DEF},   {"do", T_DO},         {"Double", T_DOUBLE},
-    {"else", T_ELSE}, {"if", T_IF},         {"import", T_IMPORT},
-    {"Int", T_INT},   {"return", T_RETURN}, {"String", T_STRING},
-    {"then", T_THEN}, {"Unit", T_UNIT},     {"val", T_VAL},
-    {"var", T_VAR},   {"while", T_WHILE},
+    {"def", T_DEF},
+    {"do", T_DO},
+    {"Double", T_DOUBLE},
+    {"else", T_ELSE},
+    {"if", T_IF},
+    {"import", T_IMPORT},
+    {"Int", T_INT},
+    {"return", T_RETURN},
+    {"String", T_STRING},
+    {"then", T_THEN},
+    {"Unit", T_UNIT},
+    {"val", T_VAL},
+    {"var", T_VAR},
+    {"while", T_WHILE},
+    // keywords from extensions (BOOLTHEN, CONTROL) and reserved words
+    {"Boolean", T_BOOLEAN},
+    {"true", T_TRUE},
+    {"false", T_FALSE},
+    {"case", T_CASE},
+    {"class", T_CLASS},
+    {"extension", T_EXTENSION},
+    {"for", T_FOR},
+    {"List", T_LIST},
+    {"match", T_MATCH},
+    {"type", T_TYPE},
 };
 // Returns keyword token type or T_ID
 static Token_type check_keyword(const char *str) {
