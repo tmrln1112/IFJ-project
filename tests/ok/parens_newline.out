@@ -1,0 +1,14 @@
+Line 1 | Token: T_DEF           | Attr: NULL
+Line 1 | Token: T_ID            | Attr: calc
+Line 1 | Token: T_LPAR          | Attr: NULL
+Line 2 | Token: T_ID            | Attr: x
+Line 2 | Token: T_COMMA         | Attr: NULL
+Line 3 | Token: T_ID            | Attr: y
+Line 4 | Token: T_RPAR          | Attr: NULL
+Line 4 | Token: T_EOL           | Attr: NULL
+Line 5 | Token: T_VAL           | Attr: NULL
+Line 5 | Token: T_ID            | Attr: z
+Line 5 | Token: T_ASSIGN        | Attr: NULL
+Line 5 | Token: T_LIT_INT       | Attr: 1
+Line 5 | Token: T_EOL           | Attr: NULL
+Line 6 | Token: T_EOF           | Attr: NULL

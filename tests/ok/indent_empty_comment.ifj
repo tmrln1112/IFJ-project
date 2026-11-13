@@ -1,0 +1,7 @@
+def f() =
+    val a = 1
+
+      // indented comment
+/* block at col 0 */
+    
+    val b = 2

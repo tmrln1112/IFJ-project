@@ -17,6 +17,9 @@ scanner.o: scanner.c scanner.h dynstr.h
 dynstr.o: dynstr.c dynstr.h
 	$(CC) $(CFLAGS) -c dynstr.c -o dynstr.o
 
+test: ifj26
+	sh tests/run_tests.sh ./ifj26
+
 format:
 	clang-format --style=LLVM -i *.c *.h
 
