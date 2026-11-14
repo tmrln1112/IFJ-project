@@ -125,9 +125,10 @@ int main(void) {
   int result;
 
   while ((result = get_token(&token)) == 0) {
-    printf("Line %d | Token: %-15s | Attr: %s\n", token.line,
+    printf("Line %d | Token: %-15s | Attr: %s%s\n", token.line,
            token_type_to_string(token.type),
-           token.attribute ? token.attribute : "NULL");
+           token.attribute ? token.attribute : "NULL",
+           token.newline_before ? " | newline_before" : "");
     if (token.type == T_EOF) {
       free_token(&token);
       break;

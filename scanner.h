@@ -78,9 +78,11 @@ typedef enum {
 } Token_type;
 
 typedef struct {
-  Token_type type; // type of the token
-  char *attribute; // attribute of the token
-  int line;        // line number in the source file
+  Token_type type;     // type of the token
+  char *attribute;     // attribute of the token
+  int line;            // line number in the source file
+  bool newline_before; // an LF inside parentheses was skipped right before
+                       // this token (needed for a trailing comma)
 } Token;
 /**
  * @brief Initializes the scanner module with input source file.

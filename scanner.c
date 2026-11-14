@@ -25,6 +25,8 @@ static bool has_pending = false;
 static int pending_char = 0;
 /* ---------- Parentheses nesting ---------- */
 static int paren_depth = 0; // Nesting level of parentheses ()
+// An LF inside parentheses was skipped since the last token
+static bool lf_in_parens = false;
 
 /* ---------- Indentation handling (INDENT / DEDENT) ---------- */
 static int *indent_stack = NULL;    // Indent levels, grows with realloc
@@ -55,6 +57,7 @@ void scanner_init(FILE *source) {
   current_line = 1;
   has_pending = false;
   paren_depth = 0;
+  lf_in_parens = false;
 
   free(indent_stack);
   indent_cap = 16;
@@ -128,6 +131,8 @@ static int make_token(Token *token, Token_type type, char *attr) {
   token->type = type;
   token->attribute = attr; // NULL when the token carries no text
   token->line = current_line;
+  token->newline_before = lf_in_parens;
+  lf_in_parens = false;
   return 0;
 }
 // Frees the buffer and returns a token without text
@@ -319,6 +324,7 @@ int get_token(Token *token) {
           // line is still counted and checked
           current_line++;
           reset_line_state();
+          lf_in_parens = true;
           break;
         }
         if (at_line_start) {
