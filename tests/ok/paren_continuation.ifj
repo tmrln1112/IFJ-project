@@ -1,0 +1,17 @@
+def g(): Int =
+    val r = f(a,
+              b)
+    h(
+      x,
+      k(y,
+        z
+      )
+     )
+    return r
+p(
+
+   
+// comment at column 0
+  /* block */ q,
+    w
+  )

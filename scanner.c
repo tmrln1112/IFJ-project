@@ -273,7 +273,10 @@ int get_token(Token *token) {
       // Track line numbers and return T_EOL
       if (c == '\n') {
         if (paren_depth > 0) {
+          // Inside parentheses LF is whitespace, but the indent of the next
+          // line is still counted and checked
           current_line++;
+          reset_line_state();
           break;
         }
         if (at_line_start) {
@@ -302,9 +305,23 @@ int get_token(Token *token) {
       }
       // Check indentation level at line start
       if (at_line_start && c != '/') {
-        int res = check_indent(token, &buffer, c);
-        if (res != -1) {
-          return res;
+        if (paren_depth > 0) {
+          // A line continuing inside parentheses must be indented more than
+          // the start of its logical line; a closing ')' may stay on the
+          // same level
+          int start = indent_stack[indent_top];
+          bool indent_ok =
+              (c == ')') ? line_indent >= start : line_indent > start;
+          if (saw_tab || !indent_ok) {
+            return lex_error(&buffer);
+          }
+          at_line_start = false;
+          counting_indent = false;
+        } else {
+          int res = check_indent(token, &buffer, c);
+          if (res != -1) {
+            return res;
+          }
         }
       }
       // Identifiers or keywords
