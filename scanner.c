@@ -502,6 +502,8 @@ int get_token(Token *token) {
       if (isdigit(c)) { // '_' is only allowed between digits
         dynstr_append(&buffer, (char)c);
         state = STATE_INT;
+      } else if (c == '_') {
+        break; // several '_' in a row are allowed: 1___000
       } else {
         return lex_error(&buffer);
       }
@@ -553,6 +555,8 @@ int get_token(Token *token) {
       if (isdigit(c)) {
         dynstr_append(&buffer, (char)c);
         state = STATE_DOUBLE;
+      } else if (c == '_') {
+        break; // several '_' in a row: 1.2__3
       } else {
         return lex_error(&buffer);
       }
@@ -595,6 +599,8 @@ int get_token(Token *token) {
       if (isdigit(c)) {
         dynstr_append(&buffer, (char)c);
         state = STATE_EXP_DIGIT;
+      } else if (c == '_') {
+        break; // several '_' in a row: 1e1__2
       } else {
         // Trailing underscore after exponent digits is invalid
         return lex_error(&buffer);
