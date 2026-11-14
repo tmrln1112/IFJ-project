@@ -72,7 +72,7 @@ static const struct {
     {"val", T_VAL},
     {"var", T_VAR},
     {"while", T_WHILE},
-    // keywords from extensions (BOOLTHEN, CONTROL) and reserved words
+    // keywords of the language extensions
     {"Boolean", T_BOOLEAN},
     {"true", T_TRUE},
     {"false", T_FALSE},
@@ -182,6 +182,7 @@ typedef enum {
   STATE_BLOCK_COMMENT,       // Block comment /*
   STATE_BLOCK_COMMENT_SLASH, // '/' inside block comment
   STATE_COMMENT_NL_REST,     // after a block comment that contained LF
+  STATE_COMMENT_NL_SLASH,    // '/' read in STATE_COMMENT_NL_REST
   STATE_BLOCK_COMMENT_END,   // '*' inside block comment
   /* ---------- Operators & Assignment states ---------- */
   STATE_ASSIGN,  // '=' read
@@ -612,7 +613,24 @@ int get_token(Token *token) {
         state = STATE_START;
         break;
       }
+      if (c == '/') {
+        state = STATE_COMMENT_NL_SLASH; // maybe another comment
+        break;
+      }
       return lex_error(&buffer); // a token after such a comment
+
+    case STATE_COMMENT_NL_SLASH:
+      if (c == '/') {
+        state = STATE_LINE_COMMENT; // '//' up to the end of line
+      } else if (c == '*') {
+        // Another block comment; comment_had_nl stays true, so after it
+        // we return to STATE_COMMENT_NL_REST again
+        comment_depth = 1;
+        state = STATE_BLOCK_COMMENT;
+      } else {
+        return lex_error(&buffer); // '/' as division is a token -> error
+      }
+      break;
 
     /* ---------- Comparison & Assignment operators ---------- */
     case STATE_ASSIGN:

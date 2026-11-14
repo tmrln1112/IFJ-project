@@ -1,0 +1,10 @@
+def f() =
+    a /* x
+    y */   /* z
+    w */
+    b /* x
+    y */ // line comment
+    c /* x
+    y */ /* short */ /* nested /* inner */ end */
+    d
+e
