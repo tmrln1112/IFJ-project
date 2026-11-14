@@ -93,6 +93,12 @@ const char *token_type_to_string(Token_type type) {
     return "T_GREATER_T";
   case T_GREATER_OR_EQ:
     return "T_GREATER_OR_EQ";
+  case T_NOT:
+    return "T_NOT";
+  case T_AND:
+    return "T_AND";
+  case T_OR:
+    return "T_OR";
   case T_LPAR:
     return "T_LPAR";
   case T_RPAR:

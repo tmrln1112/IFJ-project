@@ -70,6 +70,9 @@ typedef enum {
   T_LESS_OR_EQ,    // less than or equal to
   T_GREATER_T,     // greater than
   T_GREATER_OR_EQ, // greater than or equal to
+  T_NOT,           // logical not !
+  T_AND,           // logical and &&
+  T_OR,            // logical or ||
 
 } Token_type;
 

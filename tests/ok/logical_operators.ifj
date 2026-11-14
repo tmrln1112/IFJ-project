@@ -1,0 +1,6 @@
+val ok = !done && (a || b)
+if a != b then
+    !!x
+a&&b||!c
+x ! = y
+x !== y

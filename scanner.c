@@ -113,7 +113,7 @@ static int emit(Token *token, DynStr *buf, Token_type type) {
   dynstr_free(buf);
   return make_token(token, type, NULL);
 }
-// Checks two-char operators (==, <=, >=)
+// Checks two-char operators (==, !=, <=, >=)
 static int emit_pair(Token *token, DynStr *buf, int c, Token_type with_eq,
                      Token_type alone) {
   if (c != '=') {
@@ -187,6 +187,8 @@ typedef enum {
   /* ---------- Operators & Assignment states ---------- */
   STATE_ASSIGN,  // '=' read
   STATE_EXCLAM,  // '!' read
+  STATE_AMP,     // '&' read
+  STATE_PIPE,    // '|' read
   STATE_LESS,    // '<' read
   STATE_GREATER, // '>' read
   /* ---------- String states ---------- */
@@ -332,6 +334,14 @@ int get_token(Token *token) {
       }
       if (c == '!') {
         state = STATE_EXCLAM;
+        break;
+      }
+      if (c == '&') {
+        state = STATE_AMP;
+        break;
+      }
+      if (c == '|') {
+        state = STATE_PIPE;
         break;
       }
       if (c == '<') {
@@ -633,16 +643,24 @@ int get_token(Token *token) {
       }
       break;
 
-    /* ---------- Comparison & Assignment operators ---------- */
+    /* ---------- Comparison, assignment & logical operators ---------- */
     case STATE_ASSIGN:
       return emit_pair(token, &buffer, c, T_EQ, T_ASSIGN);
 
     case STATE_EXCLAM:
-      if (c == '=') {
-        return emit(token, &buffer, T_NEQ); // '!='
-      } else {
-        return lex_error(&buffer); // Standalone '!' - lexical error
+      return emit_pair(token, &buffer, c, T_NEQ, T_NOT); // '!=' or '!'
+
+    case STATE_AMP:
+      if (c == '&') {
+        return emit(token, &buffer, T_AND);
       }
+      return lex_error(&buffer); // a single '&' is not an operator
+
+    case STATE_PIPE:
+      if (c == '|') {
+        return emit(token, &buffer, T_OR);
+      }
+      return lex_error(&buffer); // a single '|' is not an operator
 
     case STATE_LESS:
       return emit_pair(token, &buffer, c, T_LESS_OR_EQ, T_LESS_T);
