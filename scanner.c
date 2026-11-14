@@ -17,6 +17,11 @@
 static FILE *source_file = NULL; // Input file
 static int current_line = 1;     // Current line number
 static int token_start_line = 1; // Line number where current token started
+// One extra pushed-back character, read before the stream. Needed for "3."
+// followed by a non-digit: both '.' and the next char go back, but ungetc()
+// guarantees only one.
+static bool has_pending = false;
+static int pending_char = 0;
 /* ---------- Parentheses nesting ---------- */
 static int paren_depth = 0; // Nesting level of parentheses ()
 
@@ -47,6 +52,7 @@ static void reset_line_state(void) {
 void scanner_init(FILE *source) {
   source_file = source;
   current_line = 1;
+  has_pending = false;
   paren_depth = 0;
 
   free(indent_stack);
@@ -250,7 +256,12 @@ int get_token(Token *token) {
   bool comment_had_nl = false;
 
   while (1) {
-    c = fgetc(source_file);
+    if (has_pending) {
+      c = pending_char;
+      has_pending = false;
+    } else {
+      c = fgetc(source_file);
+    }
 
     switch (state) {
     case STATE_START:
@@ -457,8 +468,7 @@ int get_token(Token *token) {
 
     case STATE_ZERO:
       if (c == '.') {
-        dynstr_append(&buffer, (char)c);
-        state = STATE_INT_DOT;
+        state = STATE_INT_DOT; // '.' is stored only if a digit follows
       } else if (c == 'e' || c == 'E') {
         dynstr_append(&buffer, (char)c);
         state = STATE_EXP;
@@ -477,8 +487,7 @@ int get_token(Token *token) {
         state = STATE_INT_UNDERSCORE; // We don't store '_', only remember it
                                       // was read
       } else if (c == '.') {
-        dynstr_append(&buffer, (char)c);
-        state = STATE_INT_DOT;
+        state = STATE_INT_DOT; // '.' is stored only if a digit follows
       } else if (c == 'e' || c == 'E') {
         dynstr_append(&buffer, (char)c);
         state = STATE_EXP;
@@ -511,10 +520,16 @@ int get_token(Token *token) {
 
     case STATE_INT_DOT:
       if (isdigit(c)) {
+        dynstr_append(&buffer, '.');
         dynstr_append(&buffer, (char)c);
         state = STATE_DOUBLE;
       } else {
-        return lex_error(&buffer);
+        // Not a Double ("3.toString", "1.", "1.e5"): the number is an Int
+        // and the '.' is a separate token. Give back both '.' and c.
+        ungetc(c, source_file);
+        pending_char = '.';
+        has_pending = true;
+        return make_token(token, T_LIT_INT, dynstr_take(&buffer));
       }
       break;
 
