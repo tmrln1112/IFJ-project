@@ -99,6 +99,8 @@ const char *token_type_to_string(Token_type type) {
     return "T_AND";
   case T_OR:
     return "T_OR";
+  case T_ARROW_LEFT:
+    return "T_ARROW_LEFT";
   case T_LPAR:
     return "T_LPAR";
   case T_RPAR:

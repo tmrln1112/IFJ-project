@@ -73,6 +73,7 @@ typedef enum {
   T_NOT,           // logical not !
   T_AND,           // logical and &&
   T_OR,            // logical or ||
+  T_ARROW_LEFT,    // generator arrow <-
 
 } Token_type;
 

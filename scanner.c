@@ -663,6 +663,9 @@ int get_token(Token *token) {
       return lex_error(&buffer); // a single '|' is not an operator
 
     case STATE_LESS:
+      if (c == '-') {
+        return emit(token, &buffer, T_ARROW_LEFT); // '<-' in for loops
+      }
       return emit_pair(token, &buffer, c, T_LESS_OR_EQ, T_LESS_T);
 
     case STATE_GREATER:
