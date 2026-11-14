@@ -200,6 +200,7 @@ typedef enum {
                          // closing '"')
   STATE_STRING_MULTI_Q2, // Helper for closing multi-line string (read 2nd
                          // closing '"')
+  STATE_STRING_MULTI_Q3, // Read 3 or more closing '"' in a row
 
   STATE_AT // '@' read
 } State;
@@ -728,9 +729,7 @@ int get_token(Token *token) {
 
     case STATE_STRING_MULTI_Q2:
       if (c == '"') {
-        int res = make_token(token, T_LIT_STRING, dynstr_take(&buffer));
-        token->line = token_start_line;
-        return res;
+        state = STATE_STRING_MULTI_Q3;
       } else {
         dynstr_append(&buffer, '"');
         dynstr_append(&buffer, '"');
@@ -738,6 +737,20 @@ int get_token(Token *token) {
         state = STATE_STRING_MULTI;
       }
       break;
+
+    case STATE_STRING_MULTI_Q3:
+      // The last three quotes of a run close the string, any extra quotes
+      // before them belong to the content: """a""""" is the string a""
+      if (c == '"') {
+        dynstr_append(&buffer, '"');
+      } else {
+        ungetc(c, source_file);
+        int res = make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+        token->line = token_start_line;
+        return res;
+      }
+      break;
+
     case STATE_AT:
       // Alphanumeric or underscore
       if (isalnum(c) || c == '_') {
