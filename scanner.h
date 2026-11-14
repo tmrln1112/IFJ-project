@@ -88,6 +88,11 @@ typedef struct {
  */
 void scanner_init(FILE *source);
 /**
+ * @brief Frees memory owned by the scanner (indentation stack).
+ * @note Call once after the last get_token(), also after a lexical error.
+ */
+void scanner_free(void);
+/**
  * @brief Reads the next token from the input stream.
  * @param token Pointer to the Token structure to be filled.
  * @return 0 on success, 1 on lexical error.

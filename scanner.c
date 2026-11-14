@@ -21,8 +21,8 @@ static int token_start_line = 1; // Line number where current token started
 static int paren_depth = 0; // Nesting level of parentheses ()
 
 /* ---------- Indentation handling (INDENT / DEDENT) ---------- */
-#define MAX_INDENT_LEVELS 100
-static int indent_stack[MAX_INDENT_LEVELS];
+static int *indent_stack = NULL;    // Indent levels, grows with realloc
+static int indent_cap = 0;          // Allocated number of levels
 static int indent_top = 0;          // Stack pointer
 static bool at_line_start = true;   // Start of line flag
 static int line_indent = 0;         // Spaces count
@@ -48,9 +48,24 @@ void scanner_init(FILE *source) {
   source_file = source;
   current_line = 1;
   paren_depth = 0;
+
+  free(indent_stack);
+  indent_cap = 16;
+  indent_stack = malloc(indent_cap * sizeof(int));
+  if (!indent_stack) {
+    fprintf(stderr, "Memory allocation failed\n");
+    exit(99);
+  }
   indent_top = 0;
   indent_stack[0] = 0; // Base indent level 0
   reset_line_state();
+}
+// Frees memory owned by the scanner
+void scanner_free(void) {
+  free(indent_stack);
+  indent_stack = NULL;
+  indent_cap = 0;
+  indent_top = 0;
 }
 /* ---------- Helpers ---------- */
 // Checks if a word is a keyword
@@ -139,9 +154,15 @@ static int check_indent(Token *token, DynStr *buf, int c) {
   }
   Token_type type;
   if (line_indent > top) {
-    if (indent_top + 1 >= MAX_INDENT_LEVELS) {
-      fprintf(stderr, "Internal error: Indentation stack overflow\n");
-      exit(99);
+    if (indent_top + 1 >= indent_cap) {
+      // Stack is full, double its size
+      int *bigger = realloc(indent_stack, 2 * indent_cap * sizeof(int));
+      if (!bigger) {
+        fprintf(stderr, "Memory allocation failed\n");
+        exit(99);
+      }
+      indent_stack = bigger;
+      indent_cap *= 2;
     }
     indent_stack[++indent_top] = line_indent;
     type = T_INDENT;

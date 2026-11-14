@@ -134,6 +134,7 @@ int main(void) {
     }
     free_token(&token);
   }
+  scanner_free();
 
   if (result != 0) {
     fprintf(stderr, "LEXICAL ERROR\n");
