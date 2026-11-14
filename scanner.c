@@ -8,6 +8,7 @@
 #include "scanner.h"
 #include "dynstr.h"
 #include <ctype.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,6 +147,36 @@ static int emit_pair(Token *token, DynStr *buf, int c, Token_type with_eq,
 static int emit_text(Token *token, DynStr *buf, Token_type type, int c) {
   ungetc(c, source_file);
   return make_token(token, type, dynstr_take(buf));
+}
+// Checks that a Double literal fits into IEEE 754 binary64. Too big becomes
+// infinity (1e999), too small becomes 0 although the literal is not zero
+// (1e-999). Subnormal values such as 1e-310 are fine. errno is not used,
+// because strtod() sets ERANGE for subnormal results too.
+static bool double_in_range(const char *text) {
+  double value = strtod(text, NULL);
+  if (isinf(value)) {
+    return false;
+  }
+  if (value == 0.0) {
+    // Zero is fine only if the part before the exponent has no digit 1-9
+    for (const char *p = text; *p != '\0' && *p != 'e' && *p != 'E'; p++) {
+      if (*p >= '1' && *p <= '9') {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+// Finishes a Double literal; c is the char after it. A 'd'/'D' suffix
+// belongs to the literal, any other char is given back.
+static int emit_double(Token *token, DynStr *buf, int c) {
+  if (!double_in_range(buf->data)) {
+    return lex_error(buf); // literal out of range
+  }
+  if (c == 'd' || c == 'D') {
+    return make_token(token, T_LIT_DOUBLE, dynstr_take(buf));
+  }
+  return emit_text(token, buf, T_LIT_DOUBLE, c);
 }
 // Processes indentation at line start
 static int check_indent(Token *token, DynStr *buf, int c) {
@@ -543,11 +574,8 @@ int get_token(Token *token) {
       } else if (c == 'e' || c == 'E') {
         dynstr_append(&buffer, (char)c);
         state = STATE_EXP;
-      } else if (c == 'd' || c == 'D') { // Optional suffix: belongs to number,
-                                         // nothing to put back
-        return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
       } else {
-        return emit_text(token, &buffer, T_LIT_DOUBLE, c);
+        return emit_double(token, &buffer, c); // also handles 'd'/'D' suffix
       }
       break;
 
@@ -587,11 +615,8 @@ int get_token(Token *token) {
         dynstr_append(&buffer, (char)c);
       } else if (c == '_') { // Skip appending '_' inside exponent digits
         state = STATE_EXP_UNDERSCORE;
-      } else if (c == 'd' ||
-                 c == 'D') { // Optional suffix, same as in STATE_DOUBLE
-        return make_token(token, T_LIT_DOUBLE, dynstr_take(&buffer));
       } else {
-        return emit_text(token, &buffer, T_LIT_DOUBLE, c);
+        return emit_double(token, &buffer, c); // also handles 'd'/'D' suffix
       }
       break;
 
