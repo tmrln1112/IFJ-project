@@ -3,13 +3,13 @@ CFLAGS = -Wall -Wextra -std=c11 -pedantic -g
 
 .PHONY: all clean format test
 
-all: ifj26
+all: scanner_test
 
-ifj26: main.o scanner.o dynstr.o
-	$(CC) $(CFLAGS) main.o scanner.o dynstr.o -o ifj26
+scanner_test: scanner_test.o scanner.o dynstr.o
+	$(CC) $(CFLAGS) scanner_test.o scanner.o dynstr.o -o scanner_test
 
-main.o: main.c scanner.h
-	$(CC) $(CFLAGS) -c main.c -o main.o
+scanner_test.o: scanner_test.c scanner.h
+	$(CC) $(CFLAGS) -c scanner_test.c -o scanner_test.o
 
 scanner.o: scanner.c scanner.h dynstr.h
 	$(CC) $(CFLAGS) -c scanner.c -o scanner.o
@@ -17,11 +17,11 @@ scanner.o: scanner.c scanner.h dynstr.h
 dynstr.o: dynstr.c dynstr.h
 	$(CC) $(CFLAGS) -c dynstr.c -o dynstr.o
 
-test: ifj26
-	sh tests/run_tests.sh ./ifj26
+test: scanner_test
+	sh tests/run_tests.sh ./scanner_test
 
 format:
 	clang-format --style=LLVM -i *.c *.h
 
 clean:
-	rm -f *.o ifj26
+	rm -f *.o scanner_test

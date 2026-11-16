@@ -4,9 +4,9 @@
 #   tests/ok/*.ifj   valid input: rc must be 0 and stdout must equal *.out
 #   tests/err/*.ifj  invalid input: rc must be 1 (stdout is not compared)
 #
-# Usage: sh tests/run_tests.sh [path/to/ifj26]
+# Usage: sh tests/run_tests.sh [path/to/scanner_test]
 
-BIN=${1:-./ifj26}
+BIN=${1:-./scanner_test}
 DIR=$(dirname "$0")
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT

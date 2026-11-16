@@ -1,4 +1,8 @@
-/*Author <xkotliy00> Yaryna Kotliarenko
+/**
+ * Project IFJ26 compiler
+ * File: scanner_test.c
+ * Description: Test driver for the scanner, prints tokens read from stdin
+ * Author: <xkotliy00> Yaryna Kotliarenko
  */
 #include "scanner.h"
 #include <stdio.h>
