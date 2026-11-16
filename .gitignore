@@ -1,0 +1,6 @@
+*.o
+*.d
+/ifj26
+/scanner_test
+/build/
+/compiler
