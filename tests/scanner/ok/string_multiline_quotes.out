@@ -1,0 +1,20 @@
+Line 1 | Token: T_LIT_STRING    | Attr: a""
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 2 | Token: T_LIT_STRING    | Attr: "
+Line 2 | Token: T_EOL           | Attr: NULL
+Line 3 | Token: T_LIT_STRING    | Attr: a"
+Line 3 | Token: T_EOL           | Attr: NULL
+Line 4 | Token: T_LIT_STRING    | Attr: 
+Line 4 | Token: T_EOL           | Attr: NULL
+Line 5 | Token: T_LIT_STRING    | Attr: a""b
+Line 5 | Token: T_EOL           | Attr: NULL
+Line 6 | Token: T_LIT_STRING    | Attr: ""a
+Line 6 | Token: T_EOL           | Attr: NULL
+Line 7 | Token: T_LIT_STRING    | Attr: a
+Line 7 | Token: T_ID            | Attr: x
+Line 7 | Token: T_EOL           | Attr: NULL
+Line 8 | Token: T_LIT_STRING    | Attr: line1
+line2 ""quoted""
+"
+Line 10 | Token: T_EOL           | Attr: NULL
+Line 11 | Token: T_EOF           | Attr: NULL

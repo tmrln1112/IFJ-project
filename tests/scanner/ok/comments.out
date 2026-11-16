@@ -1,0 +1,6 @@
+Line 6 | Token: T_ID            | Attr: x
+Line 6 | Token: T_ID            | Attr: y
+Line 6 | Token: T_EOL           | Attr: NULL
+Line 7 | Token: T_ID            | Attr: z
+Line 7 | Token: T_EOL           | Attr: NULL
+Line 8 | Token: T_EOF           | Attr: NULL

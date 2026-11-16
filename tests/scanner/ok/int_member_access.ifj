@@ -1,0 +1,14 @@
+3.toString
+3.toString.length
+0.toString
+1_000.toString
+f(3.max(4))
+x.toInt
+1.0.toInt
+1.5d.toInt
+1e5.toInt
+import ifj26.*
+1.
+1.e5
+1..2
+1.5 1.5e3 0.5 .5

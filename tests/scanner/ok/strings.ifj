@@ -1,0 +1,9 @@
+"hello world"
+""
+"nl\n tab\t cr\r"
+"quote \" and backslash \\"
+"""Multiline
+string with "quotes"
+and newlines"""
+""""""
+"""raw \n not escaped"""
