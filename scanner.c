@@ -179,7 +179,7 @@ static int emit_double(Token *token, DynStr *buf, int c) {
     return lex_error(buf); // literal out of range
   }
   if (c == 'd' || c == 'D') {
-    return make_token(token, T_LIT_DOUBLE, dynstr_take(buf));
+    return make_token(token, T_LIT_DOUBLE, dynstr_take(buf)); // DBL_D
   }
   return emit_text(token, buf, T_LIT_DOUBLE, c);
 }
@@ -221,53 +221,52 @@ static int check_indent(Token *token, DynStr *buf, int c) {
 }
 /* ---------- States of the automaton ---------- */
 
+// Comments give the node name used in the automaton diagram. EOL, EOF, STR
+// (closing '"') and DBL_D (suffix d/D) are final nodes without own state.
 typedef enum {
   /* ---------- Initial & Identifier states ---------- */
-  STATE_START,      // Initial state / whitespace skipping
-  STATE_ID,         // Processing identifier or keyword
-  STATE_UNDERSCORE, // Read a leading '_', needs one more character
+  STATE_START,      // S: initial state, skips whitespace
+  STATE_ID,         // ID: identifier or keyword
+  STATE_UNDERSCORE, // Q1: read a leading '_', needs one more character
   /* ---------- Integer states ---------- */
-  STATE_ZERO,           // Read a '0'
-  STATE_INT,            // Inside an integer that started with 1-9
-  STATE_INT_UNDERSCORE, // Read '_' in an integer, a digit must follow
+  STATE_ZERO,           // ZERO: read a '0'
+  STATE_INT,            // INT: integer that started with 1-9
+  STATE_INT_UNDERSCORE, // Q3: read '_' in an integer, a digit must follow
   /* ---------- Double states ---------- */
-  STATE_DOT,               // Read '.'
-  STATE_INT_DOT,           // Integer followed by '.'
-  STATE_DOUBLE,            // Processing Double
-  STATE_DOUBLE_UNDERSCORE, // Read '_' in Double
-  STATE_EXP,               // Read 'e' or 'E'
-  STATE_EXP_SIGN,          // Read the sign of the exponent
-  STATE_EXP_DIGIT,         // Processing exponent digits
-  STATE_EXP_UNDERSCORE,    // Read '_' in the exponent
+  STATE_DOT,               // DOT: read '.'
+  STATE_INT_DOT,           // INT_DOT: integer followed by '.'
+  STATE_DOUBLE,            // DOUBLE: digits after the '.'
+  STATE_DOUBLE_UNDERSCORE, // Q4: read '_' in a Double
+  STATE_EXP,               // Q5: read 'e' or 'E'
+  STATE_EXP_SIGN,          // Q6: read the sign of the exponent
+  STATE_EXP_DIGIT,         // DBL_E: exponent digits
+  STATE_EXP_UNDERSCORE,    // Q7: read '_' in the exponent
   /* ---------- Comments & Division states ---------- */
-  STATE_SLASH,               // '/' read
-  STATE_LINE_COMMENT,        // Line comment //
-  STATE_BLOCK_COMMENT,       // Block comment /*
-  STATE_BLOCK_COMMENT_SLASH, // '/' inside block comment
-  STATE_COMMENT_NL_REST,     // after a block comment that contained LF
-  STATE_COMMENT_NL_SLASH,    // '/' read in STATE_COMMENT_NL_REST
-  STATE_BLOCK_COMMENT_END,   // '*' inside block comment
+  STATE_SLASH,               // DIV: read '/'
+  STATE_LINE_COMMENT,        // Q8: line comment //
+  STATE_BLOCK_COMMENT,       // Q9: block comment /*
+  STATE_BLOCK_COMMENT_SLASH, // Q10: '/' inside a block comment
+  STATE_COMMENT_NL_REST,     // Q12: after a block comment that contained LF
+  STATE_COMMENT_NL_SLASH,    // Q13: '/' read in Q12
+  STATE_BLOCK_COMMENT_END,   // Q11: '*' inside a block comment
   /* ---------- Operators & Assignment states ---------- */
-  STATE_ASSIGN,  // '=' read
-  STATE_EXCLAM,  // '!' read
-  STATE_AMP,     // '&' read
-  STATE_PIPE,    // '|' read
-  STATE_LESS,    // '<' read
-  STATE_GREATER, // '>' read
+  STATE_ASSIGN,  // =: read '='
+  STATE_EXCLAM,  // !: read '!'
+  STATE_AMP,     // Q14: read '&'
+  STATE_PIPE,    // Q15: read '|'
+  STATE_LESS,    // <: read '<'
+  STATE_GREATER, // >: read '>'
   /* ---------- String states ---------- */
+  STATE_STRING_START,    // Q16: read the opening '"'
+  STATE_STRING_QUOTE2,   // QUOTE2: read '""' (empty string)
+  STATE_STRING,          // Q17: inside a single-line string
+  STATE_STRING_ESC,      // Q18: read '\' inside a single-line string
+  STATE_STRING_MULTI,    // Q19: inside a """ multi-line string
+  STATE_STRING_MULTI_Q1, // Q20: read the 1st closing '"'
+  STATE_STRING_MULTI_Q2, // Q21: read the 2nd closing '"'
+  STATE_STRING_MULTI_Q3, // ML_STR: read 3 or more closing '"' in a row
 
-  STATE_STRING_START,    // Node 'f1' (read initial '"')
-  STATE_STRING_QUOTE2,   // Node 'f2' (read '""')
-  STATE_STRING,          // Node 'STR' (inside single-line string literal)
-  STATE_STRING_ESC,      // Node 'f_esc' (read '\' inside single-line string)
-  STATE_STRING_MULTI,    // Node 'f_m' (inside """ multi-line string)
-  STATE_STRING_MULTI_Q1, // Helper for closing multi-line string (read 1st
-                         // closing '"')
-  STATE_STRING_MULTI_Q2, // Helper for closing multi-line string (read 2nd
-                         // closing '"')
-  STATE_STRING_MULTI_Q3, // Read 3 or more closing '"' in a row
-
-  STATE_AT // '@' read
+  STATE_AT // Q2: read '@', final as @main
 } State;
 
 /**
@@ -332,7 +331,7 @@ int get_token(Token *token) {
           reset_line_state();
           break;
         }
-        int result = make_token(token, T_EOL, NULL);
+        int result = make_token(token, T_EOL, NULL); // EOL
         current_line++;
         reset_line_state();
         dynstr_free(&buffer);
@@ -343,13 +342,13 @@ int get_token(Token *token) {
       if (c == EOF) {
         if (!at_line_start) {
           reset_line_state();
-          return emit(token, &buffer, T_EOL);
+          return emit(token, &buffer, T_EOL); // EOL
         }
         if (indent_top > 0) {
           indent_top--;
           return emit(token, &buffer, T_DEDENT);
         }
-        return emit(token, &buffer, T_EOF);
+        return emit(token, &buffer, T_EOF); // EOF
       }
       // Check indentation level at line start
       if (at_line_start && c != '/') {
@@ -761,35 +760,35 @@ int get_token(Token *token) {
     case STATE_GREATER:
       return emit_pair(token, &buffer, c, T_GREATER_OR_EQ, T_GREATER_T);
 
-      /* ---------- String states (f1, f2, STR, f_esc, f_m) ---------- */
-    case STATE_STRING_START: // Node 'f1'
+      /* ---------- String states (Q16-Q21, QUOTE2, STR, ML_STR) ---------- */
+    case STATE_STRING_START: // Q16
       if (c == '"') {
-        state = STATE_STRING_QUOTE2; // Node 'f2' (read '""')
+        state = STATE_STRING_QUOTE2; // QUOTE2 (read '""')
       } else if (c == '\\') {
-        state = STATE_STRING_ESC; // Node 'f_esc'
+        state = STATE_STRING_ESC; // Q18
       } else if (c == '\n' || c == EOF) {
         return lex_error(
             &buffer); // Unescaped LF is illegal in single-line string
       } else {
         dynstr_append(&buffer, (char)c);
-        state = STATE_STRING; // Node 'STR'
+        state = STATE_STRING; // Q17
       }
       break;
 
-    case STATE_STRING_QUOTE2: // Node 'f2'
+    case STATE_STRING_QUOTE2: // QUOTE2
       if (c == '"') {
-        state = STATE_STRING_MULTI; // Node 'f_m' (read '"""')
+        state = STATE_STRING_MULTI; // Q19 (read '"""')
       } else {
         // Empty string "" followed by non-quote character
         return emit_text(token, &buffer, T_LIT_STRING, c);
       }
       break;
 
-    case STATE_STRING: // Node 'STR'
+    case STATE_STRING: // Q17
       if (c == '"') {
-        return make_token(token, T_LIT_STRING, dynstr_take(&buffer));
+        return make_token(token, T_LIT_STRING, dynstr_take(&buffer)); // STR
       } else if (c == '\\') {
-        state = STATE_STRING_ESC; // Node 'f_esc'
+        state = STATE_STRING_ESC; // Q18
       } else if (c == '\n' || c == EOF) {
         return lex_error(&buffer); // Unescaped LF or EOF -> lexical error 1
       } else {
@@ -797,7 +796,7 @@ int get_token(Token *token) {
       }
       break;
 
-    case STATE_STRING_ESC: // Node 'f_esc'
+    case STATE_STRING_ESC: // Q18
       if (c == '"') {
         dynstr_append(&buffer, '"');
       } else if (c == '\\') {
@@ -815,7 +814,7 @@ int get_token(Token *token) {
       state = STATE_STRING;
       break;
 
-    case STATE_STRING_MULTI: // Node 'f_m'
+    case STATE_STRING_MULTI: // Q19
       if (c == '"') {
         state = STATE_STRING_MULTI_Q1;
       } else if (c == EOF) {
