@@ -134,12 +134,87 @@ static void cg_builtin_read(const char *name, const char *type,
   printf("RETURN\n");
 }
 
+// Built-in with one argument that is done by one instruction
+static void cg_builtin_simple(const char *name, const char *instr) {
+  printf("\nLABEL $%s\n", name);
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@value\n");
+  printf("DEFVAR LF@result\n");
+  printf("POPS LF@value\n");
+  printf("%s LF@result LF@value\n", instr);
+  printf("PUSHS LF@result\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Converts any value to string, type is checked at runtime
+static void cg_builtin_tostr(void) {
+  printf("\nLABEL $toStr\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@value\n");
+  printf("DEFVAR LF@type\n");
+  printf("DEFVAR LF@result\n");
+  printf("POPS LF@value\n");
+  printf("TYPE LF@type LF@value\n");
+  printf("JUMPIFEQ $toStr$int LF@type string@int\n");
+  printf("JUMPIFEQ $toStr$float LF@type string@float\n");
+  printf("JUMPIFEQ $toStr$unit LF@type string@nil\n");
+  printf("MOVE LF@result LF@value\n"); // Already a string
+  printf("JUMP $toStr$end\n");
+  printf("LABEL $toStr$int\n");
+  printf("INT2STR LF@result LF@value\n");
+  printf("JUMP $toStr$end\n");
+  printf("LABEL $toStr$float\n");
+  printf("FLOAT2STR LF@result LF@value\n"); // Always %.2f
+  printf("JUMP $toStr$end\n");
+  printf("LABEL $toStr$unit\n");
+  printf("MOVE LF@result string@()\n");
+  printf("LABEL $toStr$end\n");
+  printf("PUSHS LF@result\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Returns ASCII code of char at index, -1 if index is out of string
+static void cg_builtin_ord(void) {
+  printf("\nLABEL $ord\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@value\n");
+  printf("DEFVAR LF@index\n");
+  printf("DEFVAR LF@len\n");
+  printf("DEFVAR LF@check\n");
+  printf("DEFVAR LF@result\n");
+  printf("POPS LF@index\n"); // Last argument is on top
+  printf("POPS LF@value\n");
+  printf("STRLEN LF@len LF@value\n");
+  printf("LT LF@check LF@index int@0\n");
+  printf("JUMPIFEQ $ord$out LF@check bool@true\n");
+  printf("LT LF@check LF@index LF@len\n");
+  printf("JUMPIFEQ $ord$out LF@check bool@false\n"); // Also empty string
+  printf("STRI2INT LF@result LF@value LF@index\n");
+  printf("JUMP $ord$end\n");
+  printf("LABEL $ord$out\n");
+  printf("MOVE LF@result int@-1\n");
+  printf("LABEL $ord$end\n");
+  printf("PUSHS LF@result\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
 // Prints code of all built-in functions
 static void cg_builtins(void) {
   cg_builtin_print();
   cg_builtin_read("readLine", "string", "string@");
   cg_builtin_read("readInt", "int", "int@0");
   cg_builtin_read("readDouble", "float", "float@0x0p+0");
+  cg_builtin_simple("toInt", "FLOAT2INT");
+  cg_builtin_simple("strLength", "STRLEN");
+  cg_builtin_simple("chr", "INT2CHAR");
+  cg_builtin_tostr();
+  cg_builtin_ord();
 }
 
 /* ---------- Program ---------- */
