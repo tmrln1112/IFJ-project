@@ -99,6 +99,49 @@ static void cg_function(ast_node *def) {
   printf("RETURN\n");
 }
 
+/* ---------- Built-in functions ---------- */
+// Prints any value, Unit is printed as ()
+static void cg_builtin_print(void) {
+  printf("\nLABEL $print\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@value\n");
+  printf("POPS LF@value\n");
+  printf("JUMPIFNEQ $print$write LF@value nil@nil\n");
+  printf("WRITE string@()\n"); // Unit has no text form in WRITE
+  printf("JUMP $print$end\n");
+  printf("LABEL $print$write\n");
+  printf("WRITE LF@value\n");
+  printf("LABEL $print$end\n");
+  printf("PUSHS nil@nil\n"); // print returns Unit
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Reads one line of given type, on EOF or bad input uses fallback value
+static void cg_builtin_read(const char *name, const char *type,
+                            const char *fallback) {
+  printf("\nLABEL $%s\n", name);
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@result\n");
+  printf("READ LF@result %s\n", type);
+  printf("JUMPIFNEQ $%s$end LF@result nil@nil\n", name);
+  printf("MOVE LF@result %s\n", fallback); // READ gave nil
+  printf("LABEL $%s$end\n", name);
+  printf("PUSHS LF@result\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Prints code of all built-in functions
+static void cg_builtins(void) {
+  cg_builtin_print();
+  cg_builtin_read("readLine", "string", "string@");
+  cg_builtin_read("readInt", "int", "int@0");
+  cg_builtin_read("readDouble", "float", "float@0x0p+0");
+}
+
 /* ---------- Program ---------- */
 // Generates the whole program: calls @main, then prints all functions
 void cg_generate(ast_node *root) {
@@ -119,4 +162,5 @@ void cg_generate(ast_node *root) {
   for (ast_node *fn = root; fn != NULL; fn = fn->right) {
     cg_function(fn->left);
   }
+  cg_builtins();
 }
