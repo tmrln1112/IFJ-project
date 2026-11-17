@@ -1,0 +1,4 @@
+PUSHS LF@age
+PUSHS string@Jan\032Novak
+PUSHS float@0x1.cp+0
+CALL $printInfo

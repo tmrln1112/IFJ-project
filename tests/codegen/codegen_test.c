@@ -7,10 +7,31 @@
 
 #define MAX_INPUT 4096
 
+// Splits a "<type> <value>" line, returns the type and sets *value
+static data_type_t split_operand(char *line, char **value) {
+  char *space = strchr(line, ' ');
+  if (space != NULL) {
+    *space = '\0';
+    *value = space + 1;
+  } else {
+    *value = line + strlen(line); // No value -> empty string
+  }
+  if (strcmp(line, "id") == 0) {
+    return TYPE_ID;
+  } else if (strcmp(line, "int") == 0) {
+    return TYPE_INT;
+  } else if (strcmp(line, "float") == 0) {
+    return TYPE_DOUBLE;
+  } else if (strcmp(line, "string") == 0) {
+    return TYPE_STRING;
+  }
+  return TYPE_UNIT;
+}
+
 // Reads whole stdin and prints it using the codegen function named in argv[1]
 int main(int argc, char *argv[]) {
   if (argc != 2) {
-    fprintf(stderr, "usage: %s string|int|float|label|program|operand\n",
+    fprintf(stderr, "usage: %s string|int|float|label|program|operand|call\n",
             argv[0]);
     return 2;
   }
@@ -42,26 +63,31 @@ int main(int argc, char *argv[]) {
     int c = cg_new_label();
     printf("%d %d %d", a, b, c);
   } else if (strcmp(argv[1], "operand") == 0) {
-    // Input format: "<type> <value>", e.g "int 42"
-    char *value = strchr(buf, ' ');
-    if (value != NULL) {
-      *value = '\0'; // Split type and value
-      value++;
-    } else {
-      value = buf + len; // No value -> empty string
-    }
-    data_type_t type = TYPE_UNIT;
-    if (strcmp(buf, "id") == 0) {
-      type = TYPE_ID;
-    } else if (strcmp(buf, "int") == 0) {
-      type = TYPE_INT;
-    } else if (strcmp(buf, "float") == 0) {
-      type = TYPE_DOUBLE;
-    } else if (strcmp(buf, "string") == 0) {
-      type = TYPE_STRING;
-    }
+    char *value;
+    data_type_t type = split_operand(buf, &value);
     ast_node node = {NODE_TERM, type, value, NULL, NULL};
     cg_print_operand(&node);
+  } else if (strcmp(argv[1], "call") == 0) {
+    // Input: first line is the function name, then one argument per line
+    ast_node args[16];
+    int count = 0;
+    char *name = strtok(buf, "\n");
+    char *line;
+    while (count < 16 && (line = strtok(NULL, "\n")) != NULL) {
+      char *value;
+      data_type_t type = split_operand(line, &value);
+      args[count] = (ast_node){NODE_ARGUMENT, type, value, NULL, NULL};
+      if (count > 0) {
+        args[count - 1].left = &args[count]; // Link previous argument to this
+      }
+      count++;
+    }
+    ast_node call = {NODE_FUN_CALL, TYPE_ID, name, NULL, NULL};
+    if (count > 0) {
+      call.left = &args[0];
+    }
+    cg_fun_call(&call);
+    return 0; // Output already ends with a newline
   } else {
     fprintf(stderr, "unknown function: %s\n", argv[1]);
     return 2;
