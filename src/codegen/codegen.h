@@ -20,4 +20,11 @@ void cg_print_string(const char *s);
  */
 void cg_print_int(const char *text);
 
+/**
+ * Prints a floating-point constant in IFJcode26 format (float@..., printf %a)
+ * to stdout.
+ * text: decimal literal from the scanner, without underscores (e.g. "1.5").
+ */
+void cg_print_float(const char *text);
+
 #endif // CODEGEN_H

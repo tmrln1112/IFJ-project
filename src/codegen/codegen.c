@@ -7,6 +7,7 @@
 
 #include "codegen.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 void cg_print_string(const char *s) {
   printf("string@");
@@ -21,3 +22,7 @@ void cg_print_string(const char *s) {
 }
 
 void cg_print_int(const char *text) { printf("int@%s", text); }
+
+void cg_print_float(const char *text) {
+  printf("float@%a", strtod(text, NULL));
+}
