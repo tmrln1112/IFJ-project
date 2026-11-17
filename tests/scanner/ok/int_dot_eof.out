@@ -1,0 +1,4 @@
+Line 1 | Token: T_LIT_INT       | Attr: 1
+Line 1 | Token: T_DOT           | Attr: NULL
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 1 | Token: T_EOF           | Attr: NULL

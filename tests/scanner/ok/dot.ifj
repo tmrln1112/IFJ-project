@@ -1,0 +1,3 @@
+import ifj
+ifj.write(x)
+a . b

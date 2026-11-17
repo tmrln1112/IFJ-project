@@ -1,0 +1,8 @@
+def foo(): Int =
+    val a = 5
+    if a == 5 then
+        val b = 10
+        return b
+    val c = 20
+    return c
+val d = 1
