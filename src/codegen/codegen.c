@@ -88,16 +88,100 @@ static void cg_params_pop(ast_node *param) {
   printf("POPS LF@%s\n", param->value);
 }
 
-// Generates one function: label, new frame, parameters, return
+/* ---------- Statements ---------- */
+// Defines all local variables in advance, also inside if/while blocks,
+// so DEFVAR is never repeated in a loop
+static void cg_defvars(const ast_node *block) {
+  for (; block != NULL && block->node_type == NODE_BLOCK;
+       block = block->right) {
+    const ast_node *stmt = block->left;
+    if (stmt == NULL) {
+      continue;
+    }
+    if (stmt->node_type == NODE_VAR_DEF || stmt->node_type == NODE_VAL_DEF) {
+      printf("DEFVAR LF@%s\n", stmt->value);
+    } else if (stmt->node_type == NODE_WHILE) {
+      cg_defvars(stmt->right);
+    } else if (stmt->node_type == NODE_IF && stmt->right != NULL) {
+      cg_defvars(stmt->right->left);  // then block
+      cg_defvars(stmt->right->right); // else block
+    }
+  }
+}
+
+// Stores result of a call into a variable
+static void cg_store(const char *name, const ast_node *value) {
+  if (value != NULL && value->node_type == NODE_FUN_CALL) {
+    cg_fun_call(value);
+    printf("POPS LF@%s\n", name);
+  }
+  // TODO: NODE_EXPRESSION when parser builds expression trees
+}
+
+// Leaves the function, result must already be on the stack
+static void cg_epilogue(void) {
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Generates one statement of a block
+static void cg_statement(const ast_node *stmt) {
+  switch (stmt->node_type) {
+  case NODE_VAR_DEF:
+  case NODE_VAL_DEF:
+    cg_store(stmt->value, stmt->right); // DEFVAR was done in cg_defvars
+    break;
+  case NODE_ASSIGNMENT:
+    cg_store(stmt->left->value, stmt->right);
+    break;
+  case NODE_FUN_CALL:
+    cg_fun_call(stmt);
+    printf("POPS GF@$discard\n"); // Result is not used
+    break;
+  case NODE_RETURN:
+    if (stmt->left != NULL && stmt->left->node_type == NODE_FUN_CALL) {
+      cg_fun_call(stmt->left);
+    } else {
+      printf("PUSHS nil@nil\n"); // TODO: return of an expression
+    }
+    cg_epilogue();
+    break;
+  default: // if, while and expressions come later
+    break;
+  }
+}
+
+// Generates function body, the last call in the body is the result
+static void cg_body(const ast_node *body) {
+  if (body != NULL && body->node_type == NODE_FUN_CALL) {
+    cg_fun_call(body); // def f() = g()
+    return;
+  }
+  for (; body != NULL && body->node_type == NODE_BLOCK; body = body->right) {
+    const ast_node *stmt = body->left;
+    if (stmt == NULL) {
+      continue;
+    }
+    if (body->right == NULL && stmt->node_type == NODE_FUN_CALL) {
+      cg_fun_call(stmt); // Last call gives the result
+      return;
+    }
+    cg_statement(stmt);
+  }
+  printf("PUSHS nil@nil\n"); // Default result is Unit
+}
+
+// Generates one function: label, new frame, parameters, body, return
 static void cg_function(ast_node *def) {
+  const ast_node *body = def->right ? def->right->right : NULL;
   printf("\nLABEL $%s\n", def->value); // def->value is the function name
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
   cg_params_defvar(def->left);
+  cg_defvars(body);
   cg_params_pop(def->left);
-  printf("PUSHS nil@nil\n"); // Default result is Unit
-  printf("POPFRAME\n");
-  printf("RETURN\n");
+  cg_body(body);
+  cg_epilogue();
 }
 
 /* ---------- Built-in functions ---------- */
@@ -275,6 +359,7 @@ void cg_generate(ast_node *root) {
   }
 
   printf(".IFJcode26\n");
+  printf("DEFVAR GF@$discard\n"); // For unused call results
   printf("CALL $%s\n", main_name);
   printf("EXIT int@0\n"); // End program after @main returns
 
