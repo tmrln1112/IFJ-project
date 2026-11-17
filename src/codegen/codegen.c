@@ -204,6 +204,48 @@ static void cg_builtin_ord(void) {
   printf("RETURN\n");
 }
 
+// Returns part of string from start to end (end not included), error 40
+// on bad indexes
+static void cg_builtin_substr(void) {
+  printf("\nLABEL $subStr\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@value\n");
+  printf("DEFVAR LF@start\n");
+  printf("DEFVAR LF@end\n");
+  printf("DEFVAR LF@len\n");
+  printf("DEFVAR LF@check\n");
+  printf("DEFVAR LF@char\n");
+  printf("DEFVAR LF@result\n");
+  printf("POPS LF@end\n"); // Arguments come back in reverse order
+  printf("POPS LF@start\n");
+  printf("POPS LF@value\n");
+  printf("STRLEN LF@len LF@value\n");
+  printf("LT LF@check LF@start int@0\n");
+  printf("JUMPIFEQ $subStr$error LF@check bool@true\n");
+  printf("LT LF@check LF@end int@0\n");
+  printf("JUMPIFEQ $subStr$error LF@check bool@true\n");
+  printf("GT LF@check LF@start LF@end\n");
+  printf("JUMPIFEQ $subStr$error LF@check bool@true\n");
+  printf("LT LF@check LF@start LF@len\n");
+  printf("JUMPIFEQ $subStr$error LF@check bool@false\n"); // start >= len
+  printf("GT LF@check LF@end LF@len\n");
+  printf("JUMPIFEQ $subStr$error LF@check bool@true\n");
+  printf("MOVE LF@result string@\n");
+  printf("LABEL $subStr$loop\n"); // Add one char per step
+  printf("JUMPIFEQ $subStr$end LF@start LF@end\n");
+  printf("GETCHAR LF@char LF@value LF@start\n");
+  printf("CONCAT LF@result LF@result LF@char\n");
+  printf("ADD LF@start LF@start int@1\n");
+  printf("JUMP $subStr$loop\n");
+  printf("LABEL $subStr$error\n");
+  printf("EXIT int@40\n");
+  printf("LABEL $subStr$end\n");
+  printf("PUSHS LF@result\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
 // Prints code of all built-in functions
 static void cg_builtins(void) {
   cg_builtin_print();
@@ -215,6 +257,7 @@ static void cg_builtins(void) {
   cg_builtin_simple("chr", "INT2CHAR");
   cg_builtin_tostr();
   cg_builtin_ord();
+  cg_builtin_substr();
 }
 
 /* ---------- Program ---------- */
