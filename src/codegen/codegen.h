@@ -27,4 +27,10 @@ void cg_print_int(const char *text);
  */
 void cg_print_float(const char *text);
 
+/**
+ * Returns a new unique number for IFJcode26 labels (1, 2,3, ...).
+ * Used to make labels of if/while unique, e.g "while$3$start".
+ */
+int cg_new_label(void);
+
 #endif // CODEGEN_H

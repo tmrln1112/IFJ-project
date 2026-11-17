@@ -26,3 +26,8 @@ void cg_print_int(const char *text) { printf("int@%s", text); }
 void cg_print_float(const char *text) {
   printf("float@%a", strtod(text, NULL));
 }
+
+int cg_new_label(void) {
+  static int counter = 0;
+  return ++counter;
+}
