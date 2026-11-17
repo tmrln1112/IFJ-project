@@ -18,8 +18,10 @@ int main(int argc, char *argv[]) {
     cg_print_string(buf);
   } else if (strcmp(argv[1], "int") == 0) {
     cg_print_int(buf);
+  } else if (strcmp(argv[1], "float") == 0) {
+    cg_print_float(buf);
   } else {
-    fprintf(stderr, "unknow function: %s\n", argv[1]);
+    fprintf(stderr, "unknown function: %s\n", argv[1]);
     return 2;
   }
   printf("\n");
