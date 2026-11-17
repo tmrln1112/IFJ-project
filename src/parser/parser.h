@@ -4,9 +4,9 @@
 #include "scanner.h"
 #include "ast.h"
 
-void skip_eol(void);
+int skip_eol(void);
 
-void skip_whitespace(void);
+int skip_whitespace(void);
 
 bool is_type_token(Token_type type);
 
