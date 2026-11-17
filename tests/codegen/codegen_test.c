@@ -10,7 +10,8 @@
 // Reads whole stdin and prints it using the codegen function named in argv[1]
 int main(int argc, char *argv[]) {
   if (argc != 2) {
-    fprintf(stderr, "usage: %s string|int|float|label|program\n", argv[0]);
+    fprintf(stderr, "usage: %s string|int|float|label|program|operand\n",
+            argv[0]);
     return 2;
   }
   // Runs the whole chain: scanner -> parser -> code generator
@@ -40,6 +41,27 @@ int main(int argc, char *argv[]) {
     int b = cg_new_label();
     int c = cg_new_label();
     printf("%d %d %d", a, b, c);
+  } else if (strcmp(argv[1], "operand") == 0) {
+    // Input format: "<type> <value>", e.g "int 42"
+    char *value = strchr(buf, ' ');
+    if (value != NULL) {
+      *value = '\0'; // Split type and value
+      value++;
+    } else {
+      value = buf + len; // No value -> empty string
+    }
+    data_type_t type = TYPE_UNIT;
+    if (strcmp(buf, "id") == 0) {
+      type = TYPE_ID;
+    } else if (strcmp(buf, "int") == 0) {
+      type = TYPE_INT;
+    } else if (strcmp(buf, "float") == 0) {
+      type = TYPE_DOUBLE;
+    } else if (strcmp(buf, "string") == 0) {
+      type = TYPE_STRING;
+    }
+    ast_node node = {NODE_TERM, type, value, NULL, NULL};
+    cg_print_operand(&node);
   } else {
     fprintf(stderr, "unknown function: %s\n", argv[1]);
     return 2;
