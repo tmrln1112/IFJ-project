@@ -1,0 +1,18 @@
+Line 1 | Token: T_LIT_STRING    | Attr: hello world
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 2 | Token: T_LIT_STRING    | Attr: 
+Line 2 | Token: T_EOL           | Attr: NULL
+Line 3 | Token: T_LIT_STRING    | Attr: nl
+ tab	 cr
+Line 3 | Token: T_EOL           | Attr: NULL
+Line 4 | Token: T_LIT_STRING    | Attr: quote " and backslash \
+Line 4 | Token: T_EOL           | Attr: NULL
+Line 5 | Token: T_LIT_STRING    | Attr: Multiline
+string with "quotes"
+and newlines
+Line 7 | Token: T_EOL           | Attr: NULL
+Line 8 | Token: T_LIT_STRING    | Attr: 
+Line 8 | Token: T_EOL           | Attr: NULL
+Line 9 | Token: T_LIT_STRING    | Attr: raw \n not escaped
+Line 9 | Token: T_EOL           | Attr: NULL
+Line 10 | Token: T_EOF           | Attr: NULL

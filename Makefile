@@ -1,30 +1,47 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -pedantic -g
+TARGET = ifj26
 
-.PHONY: all clean format test
+# sources are split between these dirs
+VPATH = src:src/scanner:src/parser:src/ast
+CPPFLAGS = -Isrc -Isrc/scanner -Isrc/parser -Isrc/ast
 
-all: ifj26
+SRCS = main.c scanner.c dynstr.c \
+       ast.c parser.c
 
-ifj26: main.o scanner.o dynstr.o ast.o parser.o
-	$(CC) $(CFLAGS) main.o scanner.o dynstr.o ast.o parser.o -o ifj26
+OBJS = $(addprefix build/,$(SRCS:.c=.o))
+DEPS = $(OBJS:.o=.d) build/scanner_test.d
 
-main.o: main.c scanner.h parser.h
-	$(CC) $(CFLAGS) -c main.c -o main.o
+.PHONY: all clean rebuild format test
 
-scanner.o: scanner.c scanner.h dynstr.h
-	$(CC) $(CFLAGS) -c scanner.c -o scanner.o
+all: $(TARGET)
 
-dynstr.o: dynstr.c dynstr.h
-	$(CC) $(CFLAGS) -c dynstr.c -o dynstr.o
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-ast.o: ast.c ast.h
-	$(CC) $(CFLAGS) -c ast.c -o ast.o
+# .d files track included headers
+build/%.o: %.c Makefile
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
-parser.o: parser.c parser.h ast.h scanner.h
-	$(CC) $(CFLAGS) -c parser.c -o parser.o
+# scanner can be tested separately
+
+scanner_test: build/scanner_test.o build/scanner.o build/dynstr.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+test: scanner_test
+	sh tests/scanner/run_tests.sh ./scanner_test
 
 format:
-	clang-format --style=LLVM -i *.c *.h
+	find src -type f \( -name '*.c' -o -name '*.h' \) -exec clang-format --style=LLVM -i {} +
 
 clean:
-	rm -f *.o ifj26
+	$(RM) -r build
+	$(RM) $(TARGET) scanner_test
+
+# separate calls so clean does not race the build with -j
+rebuild:
+	$(MAKE) clean
+	$(MAKE) all
+
+-include $(DEPS)

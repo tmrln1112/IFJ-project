@@ -1,0 +1,6 @@
+Line 1 | Token: T_ID            | Attr: f
+Line 1 | Token: T_LPAR          | Attr: NULL
+Line 2 | Token: T_ID            | Attr: a | newline_before
+Line 3 | Token: T_RPAR          | Attr: NULL | newline_before
+Line 3 | Token: T_EOL           | Attr: NULL
+Line 4 | Token: T_EOF           | Attr: NULL

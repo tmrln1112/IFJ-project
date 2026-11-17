@@ -1,0 +1,47 @@
+Line 1 | Token: T_ID            | Attr: f
+Line 1 | Token: T_LPAR          | Attr: NULL
+Line 1 | Token: T_ID            | Attr: a
+Line 1 | Token: T_COMMA         | Attr: NULL
+Line 1 | Token: T_ID            | Attr: b
+Line 1 | Token: T_COMMA         | Attr: NULL
+Line 2 | Token: T_RPAR          | Attr: NULL | newline_before
+Line 2 | Token: T_EOL           | Attr: NULL
+Line 3 | Token: T_ID            | Attr: g
+Line 3 | Token: T_LPAR          | Attr: NULL
+Line 4 | Token: T_ID            | Attr: x | newline_before
+Line 4 | Token: T_COMMA         | Attr: NULL
+Line 7 | Token: T_ID            | Attr: y | newline_before
+Line 7 | Token: T_COMMA         | Attr: NULL
+Line 8 | Token: T_RPAR          | Attr: NULL | newline_before
+Line 8 | Token: T_EOL           | Attr: NULL
+Line 9 | Token: T_ID            | Attr: h
+Line 9 | Token: T_LPAR          | Attr: NULL
+Line 9 | Token: T_ID            | Attr: a
+Line 9 | Token: T_COMMA         | Attr: NULL
+Line 9 | Token: T_ID            | Attr: b
+Line 9 | Token: T_COMMA         | Attr: NULL
+Line 9 | Token: T_RPAR          | Attr: NULL
+Line 9 | Token: T_EOL           | Attr: NULL
+Line 10 | Token: T_ID            | Attr: k
+Line 10 | Token: T_LPAR          | Attr: NULL
+Line 10 | Token: T_ID            | Attr: a
+Line 10 | Token: T_COMMA         | Attr: NULL
+Line 11 | Token: T_ID            | Attr: b | newline_before
+Line 11 | Token: T_RPAR          | Attr: NULL
+Line 11 | Token: T_EOL           | Attr: NULL
+Line 12 | Token: T_ID            | Attr: s
+Line 12 | Token: T_LPAR          | Attr: NULL
+Line 12 | Token: T_LIT_STRING    | Attr: x
+y
+Line 13 | Token: T_COMMA         | Attr: NULL
+Line 13 | Token: T_ID            | Attr: z
+Line 13 | Token: T_RPAR          | Attr: NULL
+Line 13 | Token: T_EOL           | Attr: NULL
+Line 14 | Token: T_ID            | Attr: m
+Line 14 | Token: T_LPAR          | Attr: NULL
+Line 14 | Token: T_LIT_INT       | Attr: 1
+Line 14 | Token: T_RPAR          | Attr: NULL
+Line 14 | Token: T_EOL           | Attr: NULL
+Line 15 | Token: T_ID            | Attr: n
+Line 15 | Token: T_EOL           | Attr: NULL
+Line 16 | Token: T_EOF           | Attr: NULL

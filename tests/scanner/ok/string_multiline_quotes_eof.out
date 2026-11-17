@@ -1,0 +1,3 @@
+Line 1 | Token: T_LIT_STRING    | Attr: a"
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 1 | Token: T_EOF           | Attr: NULL
