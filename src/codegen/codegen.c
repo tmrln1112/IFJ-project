@@ -60,6 +60,17 @@ void cg_print_operand(const ast_node *node) {
   }
 }
 
+/* ---------- Calls ---------- */
+// Pushes arguments in order and calls the function, result stays on stack
+void cg_fun_call(const ast_node *call) {
+  for (const ast_node *arg = call->left; arg != NULL; arg = arg->left) {
+    printf("PUSHS ");
+    cg_print_operand(arg);
+    printf("\n");
+  }
+  printf("CALL $%s\n", call->value);
+}
+
 /* ---------- Functions ---------- */
 // Defines a local variable for every parameter
 static void cg_params_defvar(ast_node *param) {

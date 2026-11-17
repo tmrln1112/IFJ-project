@@ -46,4 +46,10 @@ void cg_generate(ast_node *root);
  */
 void cg_print_operand(const ast_node *node);
 
+/**
+ * Generates a function call: pushes arguments in order, then CALL.
+ * The returned value stays on the data stack.
+ */
+void cg_fun_call(const ast_node *call);
+
 #endif // CODEGEN_H
