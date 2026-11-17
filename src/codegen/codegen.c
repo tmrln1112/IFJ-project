@@ -7,3 +7,15 @@
 
 #include "codegen.h"
 #include <stdio.h>
+
+void cg_print_string(const char *s) {
+  printf("string@");
+  for (size_t i = 0; s[i] != '\0'; i++) {
+    unsigned char c = (unsigned char)s[i];
+    if (c <= 32 || c == 35 || c == 92) {
+      printf("\\%03d", c);
+    } else {
+      putchar(c);
+    }
+  }
+}
