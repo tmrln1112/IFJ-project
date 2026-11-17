@@ -14,4 +14,10 @@
  */
 void cg_print_string(const char *s);
 
+/**
+ * Prints an integer constant in IFJcode26 format (int@...) to stdout.
+ * text: decimal number from the scanner, without underscores (e.g. "42").
+ */
+void cg_print_int(const char *text);
+
 #endif // CODEGEN_H

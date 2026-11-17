@@ -19,3 +19,5 @@ void cg_print_string(const char *s) {
     }
   }
 }
+
+void cg_print_int(const char *text) { printf("int@%s", text); }
