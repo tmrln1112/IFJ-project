@@ -7,6 +7,7 @@
 
 #ifndef CODEGEN_H
 #define CODEGEN_H
+#include "ast.h"
 
 /**
  * Prints string s as an IFJcode26 string constant (string@...) to stdout.
@@ -32,5 +33,11 @@ void cg_print_float(const char *text);
  * Used to make labels of if/while unique, e.g "while$3$start".
  */
 int cg_new_label(void);
+
+/**
+ * Generates the whole IFJcode26 program for the AST to stdout.
+ * root: first NODE_FUNCTION / NODE_MAIN_FUNCTION node from parse_program.
+ */
+void cg_generate(ast_node *root);
 
 #endif // CODEGEN_H
