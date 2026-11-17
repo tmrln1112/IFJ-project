@@ -95,6 +95,7 @@ static void cg_function(ast_node *def) {
   printf("PUSHFRAME\n");
   cg_params_defvar(def->left);
   cg_params_pop(def->left);
+  printf("PUSHS nil@nil\n"); // Default result is Unit
   printf("POPFRAME\n");
   printf("RETURN\n");
 }
