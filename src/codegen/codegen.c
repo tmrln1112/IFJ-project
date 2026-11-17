@@ -38,6 +38,28 @@ int cg_new_label(void) {
   return ++last_label;
 }
 
+/* ---------- Operands ---------- */
+// Prints a variable or literal, the form depends on its data type
+void cg_print_operand(const ast_node *node) {
+  switch (node->data_type) {
+  case TYPE_ID:
+    printf("LF@%s", node->value); // Local variable of current function
+    break;
+  case TYPE_INT:
+    cg_print_int(node->value);
+    break;
+  case TYPE_DOUBLE:
+    cg_print_float(node->value);
+    break;
+  case TYPE_STRING:
+    cg_print_string(node->value);
+    break;
+  default: // TYPE_UNIT and TYPE_NONE have no value
+    printf("nil@nil");
+    break;
+  }
+}
+
 /* ---------- Functions ---------- */
 // Defines a local variable for every parameter
 static void cg_params_defvar(ast_node *param) {

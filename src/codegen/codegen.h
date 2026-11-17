@@ -40,4 +40,10 @@ int cg_new_label(void);
  */
 void cg_generate(ast_node *root);
 
+/**
+ * Prints a variable or literal node as an IFJcode26 operand
+ * (LF@x, int@42, float@..., string@..., nil@nil).
+ */
+void cg_print_operand(const ast_node *node);
+
 #endif // CODEGEN_H
