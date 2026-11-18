@@ -3,11 +3,11 @@ CFLAGS = -Wall -Wextra -std=c11 -pedantic -g
 TARGET = ifj26
 
 # sources are split between these dirs
-VPATH = src:src/scanner:src/parser:src/ast
-CPPFLAGS = -Isrc -Isrc/scanner -Isrc/parser -Isrc/ast
+VPATH = src:src/scanner:src/parser:src/ast:src/codegen
+CPPFLAGS = -Isrc -Isrc/scanner -Isrc/parser -Isrc/ast -Isrc/codegen
 
 SRCS = main.c scanner.c dynstr.c \
-       ast.c parser.c
+       ast.c parser.c codegen.c  
 
 OBJS = $(addprefix build/,$(SRCS:.c=.o))
 DEPS = $(OBJS:.o=.d) build/scanner_test.d
