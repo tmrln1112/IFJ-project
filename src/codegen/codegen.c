@@ -89,6 +89,8 @@ static void cg_params_pop(ast_node *param) {
 }
 
 /* ---------- Statements ---------- */
+static void cg_statement(const ast_node *stmt); // Used by if/while blocks
+
 // Defines all local variables in advance, also inside if/while blocks,
 // so DEFVAR is never repeated in a loop
 static void cg_defvars(const ast_node *block) {
@@ -124,6 +126,54 @@ static void cg_epilogue(void) {
   printf("RETURN\n");
 }
 
+// Pushes condition result (bool) on the stack
+static void cg_condition(const ast_node *cond) {
+  (void)cond; // TODO: evaluate condition when parser builds it
+  printf("PUSHS bool@true\n");
+}
+
+// Generates all statements of a block (then/else branch or loop body)
+static void cg_block(const ast_node *block) {
+  for (; block != NULL && block->node_type == NODE_BLOCK;
+       block = block->right) {
+    if (block->left != NULL) {
+      cg_statement(block->left);
+    }
+  }
+}
+
+// Generates if-then-else using jumps, else part may be missing
+static void cg_if(const ast_node *stmt) {
+  int id = cg_new_label();
+  const ast_node *body = stmt->right; // NODE_IF_BODY
+
+  cg_condition(stmt->left);
+  printf("PUSHS bool@false\n");
+  printf("JUMPIFEQS $$if%d$else\n", id); // Condition is false
+  if (body != NULL) {
+    cg_block(body->left); // then
+  }
+  printf("JUMP $$if%d$end\n", id);
+  printf("LABEL $$if%d$else\n", id);
+  if (body != NULL) {
+    cg_block(body->right); // else
+  }
+  printf("LABEL $$if%d$end\n", id);
+}
+
+// Generates while loop, condition is checked before every pass
+static void cg_while(const ast_node *stmt) {
+  int id = cg_new_label();
+
+  printf("LABEL $$while%d$start\n", id);
+  cg_condition(stmt->left);
+  printf("PUSHS bool@false\n");
+  printf("JUMPIFEQS $$while%d$end\n", id); // Condition is false
+  cg_block(stmt->right);
+  printf("JUMP $$while%d$start\n", id);
+  printf("LABEL $$while%d$end\n", id);
+}
+
 // Generates one statement of a block
 static void cg_statement(const ast_node *stmt) {
   switch (stmt->node_type) {
@@ -146,7 +196,13 @@ static void cg_statement(const ast_node *stmt) {
     }
     cg_epilogue();
     break;
-  default: // if, while and expressions come later
+  case NODE_IF:
+    cg_if(stmt);
+    break;
+  case NODE_WHILE:
+    cg_while(stmt);
+    break;
+  default: // expressions come later
     break;
   }
 }
