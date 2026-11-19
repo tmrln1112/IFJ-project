@@ -1,6 +1,8 @@
 #ifndef AST_H
 #define AST_H
 
+#include <stdbool.h>
+
 typedef enum {
     TYPE_NONE,
     TYPE_ID,
@@ -73,9 +75,8 @@ typedef enum {
     NODE_TERM,            // value: id or literal | NULL; data_type: type of value
                           // L: NULL; R: NULL
 
-    /* Placeholder nodes for expression and condition subtrees */
-    NODE_EXPRESSION,      // value: NULL; data_type: TYPE_NONE; L: NULL; R: NULL
-    NODE_CONDITION        // value: NULL; data_type: TYPE_NONE; L: NULL; R: NULL
+    NODE_EXPRESSION,      // value: operator; L: operand; R: second operand or NULL
+    NODE_CONDITION        // compatibility node for condition subtrees
 } node_type_t;
 
 typedef struct ast_node {
@@ -84,6 +85,9 @@ typedef struct ast_node {
     char *value;
     struct ast_node *left;
     struct ast_node *right;
+    bool widen_to_double;
+    bool discard_value;
+    bool if_has_value;
 } ast_node;
 
 ast_node *ast_create_node(node_type_t type, data_type_t data, char *value);
