@@ -14,6 +14,7 @@ ast_node *ast_create_node(node_type_t type, data_type_t data, char *value)
     ptr->node_type = type;
     ptr->data_type = data;
     ptr->value = value;
+    ptr->op = OP_NONE;
     return ptr;
 }
 
@@ -74,8 +75,8 @@ const char *node_type_to_string(node_type_t type) {
         case NODE_FUN_CALL: return "FUN_CALL";
         case NODE_ARGUMENT: return "ARGUMENT";
         case NODE_TERM: return "TERM";
-        case NODE_EXPRESSION: return "EXPRESSION";
-        case NODE_CONDITION: return "CONDITION";
+        case NODE_UNARY_OP: return "UNARY_OP";
+        case NODE_BINARY_OP: return "BINARY_OP";
         default: return "UNKNOWN_NODE";
     }
 }
@@ -89,6 +90,7 @@ const char *data_type_to_string(data_type_t type) {
         case TYPE_DOUBLE: return "DOUBLE";
         case TYPE_STRING: return "STRING";
         case TYPE_UNIT: return "UNIT";
+        case TYPE_BOOL_LITERAL: return "BOOLEAN";
         default: return "UNKNOWN_TYPE";
     }
 }
@@ -104,10 +106,10 @@ void ast_print_tree_rec(ast_node *node, int depth) {
         printf("  ");
     }
 
-    // Print node type and evaluated data type (omitting literal values)
+    // Print the node type, data type and optional value.
     printf("Node: %s | DataType: %s | Value: %s\n", 
            node_type_to_string(node->node_type), 
-           data_type_to_string(node->data_type), node->value);
+           data_type_to_string(node->data_type), node->value ? node->value : "(null)");
 
     // Recursively print left and right subtrees
     ast_print_tree_rec(node->left, depth + 1);
