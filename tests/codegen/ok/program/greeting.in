@@ -1,0 +1,8 @@
+import ifj26.*
+
+def greet(name: String): Unit =
+  print(name)
+
+@main def run(): Unit =
+  greet("Ahoj")
+  greet("Nazdar")

@@ -1,0 +1,28 @@
+.IFJcode26
+DEFVAR GF@$discard
+CALL $run
+EXIT int@0
+LABEL $run
+CREATEFRAME
+PUSHFRAME
+DEFVAR LF@age$1
+DEFVAR LF@text$2
+DEFVAR LF@len$3
+DEFVAR LF@first$4
+CALL $readInt
+POPS LF@age$1
+PUSHS LF@age$1
+CALL $toStr
+POPS LF@text$2
+PUSHS LF@text$2
+CALL $strLength
+POPS LF@len$3
+PUSHS LF@text$2
+PUSHS int@0
+PUSHS int@1
+CALL $subStr
+POPS LF@first$4
+PUSHS LF@first$4
+CALL $print
+POPFRAME
+RETURN

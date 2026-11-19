@@ -1,0 +1,16 @@
+.IFJcode26
+DEFVAR GF@$discard
+CALL $run
+EXIT int@0
+LABEL $run
+CREATEFRAME
+PUSHFRAME
+DEFVAR LF@count$1
+CALL $readInt
+POPS LF@count$1
+CALL $readInt
+POPS LF@count$1
+PUSHS LF@count$1
+CALL $print
+POPFRAME
+RETURN

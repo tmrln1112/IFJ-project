@@ -1,13 +1,14 @@
+
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -pedantic -g
 TARGET = ifj26
 
 # sources are split between these dirs
-VPATH = src:src/scanner:src/parser:src/ast:src/parser_stack
-CPPFLAGS = -Isrc -Isrc/scanner -Isrc/parser -Isrc/ast -Isrc/parser_stack
+VPATH = src:src/scanner:src/parser:src/ast:src/parser_stack:src/codegen
+CPPFLAGS = -Isrc -Isrc/scanner -Isrc/parser -Isrc/ast -Isrc/parser_stack -Isrc/codegen
 
 SRCS = main.c scanner.c dynstr.c \
-       ast.c parser.c pstack.c
+       ast.c parser.c pstack.c codegen.c
 
 OBJS = $(addprefix build/,$(SRCS:.c=.o))
 DEPS = $(OBJS:.o=.d) build/scanner_test.d
@@ -25,7 +26,6 @@ build/%.o: %.c Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 # scanner can be tested separately
-
 scanner_test: build/scanner_test.o build/scanner.o build/dynstr.o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
