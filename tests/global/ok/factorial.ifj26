@@ -1,0 +1,16 @@
+import ifj26.*
+
+
+@main def run(): Unit =
+  val n = readInt()
+  val result = factorial(n)
+  print(result)
+  print("\n")
+
+def factorial(n: Int): Int =
+  if n <= 1 then
+    return 1
+  else
+    val prev = n - 1
+    val partial = factorial(prev)
+    return n * partial

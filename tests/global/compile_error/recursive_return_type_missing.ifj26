@@ -1,0 +1,6 @@
+import ifj26.*
+
+def recur(n: Int) = recur(n)
+
+@main def run(): Unit =
+  ()

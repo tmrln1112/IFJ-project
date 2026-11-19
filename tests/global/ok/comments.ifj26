@@ -1,0 +1,10 @@
+/* before /* nested */ prolog */
+import ifj26.*
+
+@main def run(): Unit =
+  val x = 2 /* inline /* nested */ end */ + 3 // end of statement
+
+  /* multi
+     line */
+  print(x)
+  print("\n")

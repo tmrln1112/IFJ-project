@@ -1,0 +1,15 @@
+import ifj26.*
+
+
+def widen(x: Double): Double = x
+def intResult(): Double = 4
+
+@main def run(): Unit =
+  var x: Double = 3
+  x = 5
+  val a = widen(2)
+  val b = intResult()
+  val c = (x + a + b) / 2.0
+  val s = toStr(c)
+  print(s)
+  print("\n")

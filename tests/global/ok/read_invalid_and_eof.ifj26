@@ -1,0 +1,14 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val spaced = readInt()
+  val underscored = readInt()
+  val overflow = readInt()
+  val malformed = readDouble()
+  val last = readLine()
+  val eofLine = readLine()
+  val eofInt = readInt()
+  val d = toStr(malformed)
+  val len = strLength(eofLine)
+  print(spaced); print(underscored); print(overflow); print(":"); print(d); print(":")
+  print(last); print(":"); print(len); print(eofInt); print("\n")

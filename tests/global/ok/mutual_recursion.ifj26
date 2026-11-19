@@ -1,0 +1,21 @@
+import ifj26.*
+
+
+def even(n: Int): Int =
+  if n == 0 then
+    return 1
+  else
+    val rest = n - 1
+    return odd(rest)
+
+def odd(n: Int): Int =
+  if n == 0 then
+    return 0
+  else
+    val rest = n - 1
+    return even(rest)
+
+@main def run(): Unit =
+  val a = even(8)
+  val b = even(7)
+  print(a); print(b); print("\n")

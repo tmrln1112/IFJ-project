@@ -1,0 +1,12 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val text = "ab" + "cd"
+  val len = strLength(text)
+  val middle = subStr(text, 1, 4)
+  val empty = subStr(text, 1, 1)
+  val code = ord(text, 0)
+  val bad = ord(text, 4)
+  val ch = chr(90)
+  print(len); print(":"); print(middle); print(":"); print(empty); print(":")
+  print(code); print(":"); print(bad); print(":"); print(ch); print("\n")
