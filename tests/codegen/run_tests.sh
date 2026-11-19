@@ -1,5 +1,5 @@
 #!/bin/sh
-# Regression tests for IFJcode26 constant printing (codegen helpers).
+# Regression tests for IFJcode26 code generator.
 #
 #   tests/codegen/ok/<function>/*.in   input: stdout must equal *.out
 #
@@ -21,7 +21,12 @@ fi
 for dir in "$DIR"/ok/*/; do
   func=$(basename "$dir")
   for f in "$dir"*.in; do
-    "$BIN" "$func" <"$f" >"$TMP" 2>/dev/null
+    if [ "$func" = "program" ]; then
+      # Only user code, built-in functions are tested on their own
+      "$BIN" "$func" <"$f" 2>/dev/null | sed -e '/^LABEL \$print$/,$d' -e '/^$/d' >"$TMP"
+    else
+      "$BIN" "$func" <"$f" >"$TMP" 2>/dev/null
+    fi
     if ! diff -u "${f%.in}.out" "$TMP" >/dev/null; then
       echo "FAIL  $f (output differs)"
       diff -u "${f%.in}.out" "$TMP" | head -n 20

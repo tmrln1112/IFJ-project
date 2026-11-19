@@ -1,0 +1,8 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val age = readInt()
+  val text = toStr(age)
+  val len = strLength(text)
+  val first = subStr(text, 0, 1)
+  print(first)

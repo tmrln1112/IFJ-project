@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def run(): Unit =
+  var count = readInt()
+  count = readInt()
+  print(count)
