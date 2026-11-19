@@ -1,0 +1,4 @@
+PUSHS LF@text
+PUSHS int@0
+PUSHS int@3
+CALL $subStr

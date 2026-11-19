@@ -1,0 +1,3 @@
+PUSHS int@10
+PUSHS int@25
+CALL $max

@@ -1,0 +1,23 @@
+.IFJcode26
+DEFVAR GF@$discard
+CALL $run
+EXIT int@0
+LABEL $greet
+CREATEFRAME
+PUSHFRAME
+DEFVAR LF@name
+POPS LF@name
+PUSHS LF@name
+CALL $print
+POPFRAME
+RETURN
+LABEL $run
+CREATEFRAME
+PUSHFRAME
+PUSHS string@Ahoj
+CALL $greet
+POPS GF@$discard
+PUSHS string@Nazdar
+CALL $greet
+POPFRAME
+RETURN

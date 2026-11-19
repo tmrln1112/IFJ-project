@@ -1,0 +1,8 @@
+import ifj26.*
+
+def readName(): String =
+  readLine()
+
+@main def run(): Unit =
+  val name = readName()
+  print(name)
