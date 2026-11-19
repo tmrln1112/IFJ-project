@@ -8,6 +8,7 @@
 #include "codegen.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ---------- Constants ---------- */
 // Prints a string constant, chars 0-32, # and \ as \xyz escape
@@ -88,6 +89,60 @@ static void cg_params_pop(ast_node *param) {
   printf("POPS LF@%s\n", param->value);
 }
 
+/* ---------- Expressions ---------- */
+// Prints stack instructions for one binary operator
+static void cg_operator(const char *op) {
+  if (strcmp(op, "+") == 0) {
+    printf("CALL $$add\n"); // Number addition or string concatenation
+  } else if (strcmp(op, "/") == 0) {
+    printf("CALL $$div\n"); // IDIVS for Int, DIVS for Double
+  } else {
+    printf("CALL $$align\n"); // Int -> Double if the other one is Double
+    if (strcmp(op, "-") == 0) {
+      printf("SUBS\n");
+    } else if (strcmp(op, "*") == 0) {
+      printf("MULS\n");
+    } else if (strcmp(op, "<") == 0) {
+      printf("LTS\n");
+    } else if (strcmp(op, ">") == 0) {
+      printf("GTS\n");
+    } else if (strcmp(op, "<=") == 0) {
+      printf("GTS\nNOTS\n"); // a <= b is not (a > b)
+    } else if (strcmp(op, ">=") == 0) {
+      printf("LTS\nNOTS\n"); // a >= b is not (a < b)
+    } else if (strcmp(op, "==") == 0) {
+      printf("EQS\n");
+    } else if (strcmp(op, "!=") == 0) {
+      printf("EQS\nNOTS\n");
+    }
+  }
+}
+
+// Generates expression tree, result is left on the data stack
+static void cg_expression(const ast_node *expr) {
+  if (expr == NULL) {
+    printf("PUSHS nil@nil\n"); // Missing value is Unit
+    return;
+  }
+  if (expr->node_type == NODE_FUN_CALL) {
+    cg_fun_call(expr); // Call leaves its result on the stack
+    return;
+  }
+  if (expr->node_type != NODE_EXPRESSION && expr->node_type != NODE_CONDITION) {
+    printf("PUSHS ");
+    cg_print_operand(expr); // Leaf: variable or literal
+    printf("\n");
+    return;
+  }
+  if (expr->value == NULL) {
+    cg_expression(expr->left); // Wrapper without operator
+    return;
+  }
+  cg_expression(expr->left);
+  cg_expression(expr->right);
+  cg_operator(expr->value);
+}
+
 /* ---------- Statements ---------- */
 static void cg_statement(const ast_node *stmt); // Used by if/while blocks
 
@@ -111,13 +166,10 @@ static void cg_defvars(const ast_node *block) {
   }
 }
 
-// Stores result of a call into a variable
+// Stores value of a call or expression into a variable
 static void cg_store(const char *name, const ast_node *value) {
-  if (value != NULL && value->node_type == NODE_FUN_CALL) {
-    cg_fun_call(value);
-    printf("POPS LF@%s\n", name);
-  }
-  // TODO: NODE_EXPRESSION when parser builds expression trees
+  cg_expression(value);
+  printf("POPS LF@%s\n", name);
 }
 
 // Leaves the function, result must already be on the stack
@@ -127,10 +179,7 @@ static void cg_epilogue(void) {
 }
 
 // Pushes condition result (bool) on the stack
-static void cg_condition(const ast_node *cond) {
-  (void)cond; // TODO: evaluate condition when parser builds it
-  printf("PUSHS bool@true\n");
-}
+static void cg_condition(const ast_node *cond) { cg_expression(cond); }
 
 // Generates all statements of a block (then/else branch or loop body)
 static void cg_block(const ast_node *block) {
@@ -189,11 +238,7 @@ static void cg_statement(const ast_node *stmt) {
     printf("POPS GF@$discard\n"); // Result is not used
     break;
   case NODE_RETURN:
-    if (stmt->left != NULL && stmt->left->node_type == NODE_FUN_CALL) {
-      cg_fun_call(stmt->left);
-    } else {
-      printf("PUSHS nil@nil\n"); // TODO: return of an expression
-    }
+    cg_expression(stmt->left); // Call, expression or Unit
     cg_epilogue();
     break;
   case NODE_IF:
@@ -202,15 +247,19 @@ static void cg_statement(const ast_node *stmt) {
   case NODE_WHILE:
     cg_while(stmt);
     break;
-  default: // expressions come later
+  case NODE_EXPRESSION:
+    cg_expression(stmt);
+    printf("POPS GF@$discard\n"); // Result is not used
+    break;
+  default: // Nothing to generate
     break;
   }
 }
 
-// Generates function body, the last call in the body is the result
+// Generates function body, the last call or expression is the result
 static void cg_body(const ast_node *body) {
-  if (body != NULL && body->node_type == NODE_FUN_CALL) {
-    cg_fun_call(body); // def f() = g()
+  if (body != NULL && body->node_type != NODE_BLOCK) {
+    cg_expression(body); // def f() = g() or def f() = x + 1
     return;
   }
   for (; body != NULL && body->node_type == NODE_BLOCK; body = body->right) {
@@ -218,8 +267,9 @@ static void cg_body(const ast_node *body) {
     if (stmt == NULL) {
       continue;
     }
-    if (body->right == NULL && stmt->node_type == NODE_FUN_CALL) {
-      cg_fun_call(stmt); // Last call gives the result
+    if (body->right == NULL && (stmt->node_type == NODE_FUN_CALL ||
+                                stmt->node_type == NODE_EXPRESSION)) {
+      cg_expression(stmt); // Last call or expression gives the result
       return;
     }
     cg_statement(stmt);
@@ -387,6 +437,85 @@ static void cg_builtin_substr(void) {
   printf("RETURN\n");
 }
 
+/* ---------- Operator helpers ---------- */
+// Converts Int to Double when the other operand is Double, keeps both on stack
+static void cg_helper_align(void) {
+  printf("\nLABEL $$align\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@a\n");
+  printf("DEFVAR LF@b\n");
+  printf("DEFVAR LF@ta\n");
+  printf("DEFVAR LF@tb\n");
+  printf("POPS LF@b\n"); // Right operand is on top
+  printf("POPS LF@a\n");
+  printf("TYPE LF@ta LF@a\n");
+  printf("TYPE LF@tb LF@b\n");
+  printf("JUMPIFEQ $$align$end LF@ta LF@tb\n"); // Same types, nothing to do
+  printf("JUMPIFNEQ $$align$b LF@ta string@int\n");
+  printf("JUMPIFNEQ $$align$end LF@tb string@float\n");
+  printf("INT2FLOAT LF@a LF@a\n");
+  printf("JUMP $$align$end\n");
+  printf("LABEL $$align$b\n");
+  printf("JUMPIFNEQ $$align$end LF@tb string@int\n");
+  printf("JUMPIFNEQ $$align$end LF@ta string@float\n");
+  printf("INT2FLOAT LF@b LF@b\n");
+  printf("LABEL $$align$end\n");
+  printf("PUSHS LF@a\n");
+  printf("PUSHS LF@b\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Adds two numbers or concatenates two strings
+static void cg_helper_add(void) {
+  printf("\nLABEL $$add\n");
+  printf("CALL $$align\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@a\n");
+  printf("DEFVAR LF@b\n");
+  printf("DEFVAR LF@type\n");
+  printf("POPS LF@b\n");
+  printf("POPS LF@a\n");
+  printf("TYPE LF@type LF@a\n");
+  printf("JUMPIFEQ $$add$str LF@type string@string\n");
+  printf("PUSHS LF@a\n");
+  printf("PUSHS LF@b\n");
+  printf("ADDS\n");
+  printf("JUMP $$add$end\n");
+  printf("LABEL $$add$str\n");
+  printf("CONCAT LF@a LF@a LF@b\n"); // CONCAT has no stack version
+  printf("PUSHS LF@a\n");
+  printf("LABEL $$add$end\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
+// Divides two numbers, integer division for Int
+static void cg_helper_div(void) {
+  printf("\nLABEL $$div\n");
+  printf("CALL $$align\n");
+  printf("CREATEFRAME\n");
+  printf("PUSHFRAME\n");
+  printf("DEFVAR LF@a\n");
+  printf("DEFVAR LF@b\n");
+  printf("DEFVAR LF@type\n");
+  printf("POPS LF@b\n");
+  printf("POPS LF@a\n");
+  printf("TYPE LF@type LF@a\n");
+  printf("PUSHS LF@a\n");
+  printf("PUSHS LF@b\n");
+  printf("JUMPIFEQ $$div$int LF@type string@int\n");
+  printf("DIVS\n");
+  printf("JUMP $$div$end\n");
+  printf("LABEL $$div$int\n");
+  printf("IDIVS\n"); // Division by zero exits with 57
+  printf("LABEL $$div$end\n");
+  printf("POPFRAME\n");
+  printf("RETURN\n");
+}
+
 // Prints code of all built-in functions
 static void cg_builtins(void) {
   cg_builtin_print();
@@ -399,6 +528,9 @@ static void cg_builtins(void) {
   cg_builtin_tostr();
   cg_builtin_ord();
   cg_builtin_substr();
+  cg_helper_align();
+  cg_helper_add();
+  cg_helper_div();
 }
 
 /* ---------- Program ---------- */
