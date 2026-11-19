@@ -3,6 +3,30 @@
 
 #include "scanner.h"
 #include "ast.h"
+#include "pstack.h"
+
+typedef enum {
+    P_POP, // >
+    P_PUSH, // <
+    P_EQ, // =
+    P_ERR, 
+} precedence_type;
+
+symbol_type_t token_to_symbol_type(Token_type type);
+
+int symbol_type_to_int(symbol_type_t *type);
+
+char *op_token_to_str(Token_type type);
+
+int build_stack_item(Token *token, symbol_type_t type, stack_item_t *item);
+
+int expression_reduction(precedence_stack_t *stack);
+
+int parser_or_scanner_err(void);
+
+data_type_t token_type_to_node_type(Token_type type);
+
+int parser_or_scanner_err(void);
 
 int skip_eol(void);
 
@@ -21,8 +45,6 @@ int parser_init(void);
 void parser_cleanup(void);
 
 int parse_expression(ast_node **node);
-
-int parse_condition(ast_node **node);
 
 int parse_arguments(ast_node **node);
 
