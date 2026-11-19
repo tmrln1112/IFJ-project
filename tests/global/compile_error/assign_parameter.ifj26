@@ -1,0 +1,7 @@
+import ifj26.*
+
+def change(n: Int): Unit =
+  n = 1
+
+@main def run(): Unit =
+  ()

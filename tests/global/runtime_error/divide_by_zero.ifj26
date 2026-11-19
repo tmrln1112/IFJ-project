@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val divisor = readInt()
+  val result = 42 / divisor
+  print(result)

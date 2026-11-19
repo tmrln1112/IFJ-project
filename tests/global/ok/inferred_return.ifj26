@@ -1,0 +1,14 @@
+import ifj26.*
+
+
+def twice(n: Int) = n * 2
+
+def six() =
+  val n = 3
+  twice(n)
+
+@main def run(): Unit =
+  var result = 0
+  result = six()
+  print(result)
+  print("\n")

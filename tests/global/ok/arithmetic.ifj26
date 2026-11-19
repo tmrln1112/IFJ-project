@@ -1,0 +1,10 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val a = 2 + 3 * 4
+  val b = (2 + 3) * 4
+  val c = -7 / 3
+  val d = 20 - 5 - 3
+  val e = 64 / 4 / 2
+  print(a); print(","); print(b); print(","); print(c); print(","); print(d); print(","); print(e)
+  print("\n")

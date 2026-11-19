@@ -1,0 +1,7 @@
+import ifj26.*
+
+def helper(x: Int): Int = x
+def helper(x: String): String = x
+
+@main def run(): Unit =
+  ()

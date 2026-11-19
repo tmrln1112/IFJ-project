@@ -1,0 +1,10 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val _n = 1_000_005
+  val x = .5D + 1.25e+1 + 2E-1d
+  val s = toStr(x)
+  print(_n)
+  print("\n")
+  print(s)
+  print("\n")

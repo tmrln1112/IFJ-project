@@ -1,0 +1,14 @@
+import ifj26.*
+
+@main def run(): Unit =
+  var x = 10
+  if x == 10 then
+    var x = 2
+    x = x + 1
+    print(x)
+  else
+    val x = 99
+    print(x)
+  print(",")
+  print(x)
+  print("\n")

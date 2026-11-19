@@ -1,0 +1,5 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val fixed = 1
+  fixed = 2
