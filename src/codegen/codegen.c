@@ -109,6 +109,7 @@ void cg_fun_call(const ast_node *call) {
     printf("PUSHS ");
     cg_print_operand(arg);
     printf("\n");
+    if (arg->widen_to_double) printf("INT2FLOATS\n");
   }
   printf("CALL $%s\n", call->value);
 }
@@ -159,8 +160,9 @@ static void cg_operator(const char *op) {
   }
 }
 
-// Generates expression tree, result is left on the data stack
-static void cg_expression(const ast_node *expr) {
+static void cg_expression(const ast_node *expr);
+
+static void cg_expression_value(const ast_node *expr) {
   if (expr == NULL) {
     printf("PUSHS nil@nil\n"); // Missing value is Unit
     return;
@@ -180,12 +182,25 @@ static void cg_expression(const ast_node *expr) {
     return;
   }
   cg_expression(expr->left);
+  if (expr->right == NULL && strcmp(expr->value, "-") == 0) {
+    printf("PUSHS int@-1\n");
+    cg_operator("*");
+    return;
+  }
   cg_expression(expr->right);
   cg_operator(expr->value);
 }
 
+// Generates an expression and leaves its result on the data stack.
+static void cg_expression(const ast_node *expr) {
+  cg_expression_value(expr);
+  if (expr && expr->widen_to_double) printf("INT2FLOATS\n");
+  if (expr && expr->discard_value) printf("POPS GF@$discard\nPUSHS nil@nil\n");
+}
+
 /* ---------- Statements ---------- */
 static void cg_statement(const ast_node *stmt); // Used by if/while blocks
+static void cg_body(const ast_node *body);
 
 // Defines all local variables in advance, also inside if/while blocks,
 // so DEFVAR is never repeated in a loop
@@ -229,20 +244,25 @@ static void cg_block(const ast_node *block) {
 }
 
 // Generates if-then-else using jumps, else part may be missing
-static void cg_if(const ast_node *stmt) {
+static void cg_if(const ast_node *stmt, bool keep_value) {
   int id = cg_new_label();
   const ast_node *body = stmt->right; // NODE_IF_BODY
+  int saved_top = cg_scope_top;
 
   cg_condition(stmt->left);
   printf("PUSHS bool@false\n");
   printf("JUMPIFEQS $$if%d$else\n", id); // Condition is false
   if (body != NULL) {
-    cg_block(body->left); // then
+    if (keep_value) cg_body(body->left);
+    else cg_block(body->left);
+    cg_scope_top = saved_top;
   }
   printf("JUMP $$if%d$end\n", id);
   printf("LABEL $$if%d$else\n", id);
   if (body != NULL) {
-    cg_block(body->right); // else
+    if (keep_value) cg_body(body->right);
+    else cg_block(body->right);
+    cg_scope_top = saved_top;
   }
   printf("LABEL $$if%d$end\n", id);
 }
@@ -282,11 +302,12 @@ static void cg_statement(const ast_node *stmt) {
     cg_epilogue();
     break;
   case NODE_IF:
-    cg_if(stmt);
+    cg_if(stmt, false);
     break;
   case NODE_WHILE:
     cg_while(stmt);
     break;
+  case NODE_TERM:
   case NODE_EXPRESSION:
     cg_expression(stmt);
     printf("POPS GF@$discard\n"); // Result is not used
@@ -307,8 +328,15 @@ static void cg_body(const ast_node *body) {
     if (stmt == NULL) {
       continue;
     }
+    if (body->right == NULL && stmt->if_has_value) {
+      cg_if(stmt, true);
+      if (stmt->widen_to_double) printf("INT2FLOATS\n");
+      if (stmt->discard_value) printf("POPS GF@$discard\nPUSHS nil@nil\n");
+      return;
+    }
     if (body->right == NULL && (stmt->node_type == NODE_FUN_CALL ||
-                                stmt->node_type == NODE_EXPRESSION)) {
+                                stmt->node_type == NODE_EXPRESSION ||
+                                stmt->node_type == NODE_TERM)) {
       cg_expression(stmt); // Last call or expression gives the result
       return;
     }
