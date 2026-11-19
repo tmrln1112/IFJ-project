@@ -41,13 +41,13 @@ void ast_destroy(ast_node *ptr)
         if (tmp_parent->right == tmp) {
             tmp_parent->right = NULL;
         }
-        if (tmp->value != NULL)
+        if (tmp->value != NULL && tmp->node_type != NODE_EXPRESSION)
         {
             free(tmp->value);
         }
         free(tmp);
     }
-    if (ptr->value != NULL)
+    if (ptr->value != NULL && ptr->node_type != NODE_EXPRESSION)
     {
         free(ptr->value);
     }
