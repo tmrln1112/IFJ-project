@@ -39,12 +39,53 @@ int cg_new_label(void) {
   return ++last_label;
 }
 
+/* ---------- Variable names ---------- */
+#define CG_MAX_VARS 1024
+
+// One visible variable: name from source and its unique number
+typedef struct {
+  const char *name;
+  int id;
+} cg_var;
+
+static cg_var cg_scope[CG_MAX_VARS]; // Stack of visible variables
+static int cg_scope_top = 0;
+static int cg_var_count = 0; // Numbers var/val in current function
+
+// Makes a new variable visible, it hides older ones with the same name
+static void cg_declare(const char *name) {
+  if (cg_scope_top >= CG_MAX_VARS) {
+    exit(99); // Internal error: too many variables
+  }
+  cg_scope[cg_scope_top].name = name;
+  cg_scope[cg_scope_top].id = ++cg_var_count;
+  cg_scope_top++;
+}
+
+// Prints the target name of a variable, the newest declaration wins
+static void cg_print_var(const char *name) {
+  for (int i = cg_scope_top - 1; i >= 0; i--) {
+    if (strcmp(cg_scope[i].name, name) == 0) {
+      printf("LF@%s$%d", name, cg_scope[i].id);
+      return;
+    }
+  }
+  printf("LF@%s", name); // Not declared by var/val, so it is a parameter
+}
+
+// Pops value from the stack into a variable
+static void cg_pop_var(const char *name) {
+  printf("POPS ");
+  cg_print_var(name);
+  printf("\n");
+}
+
 /* ---------- Operands ---------- */
 // Prints a variable or literal, the form depends on its data type
 void cg_print_operand(const ast_node *node) {
   switch (node->data_type) {
   case TYPE_ID:
-    printf("LF@%s", node->value); // Local variable of current function
+    cg_print_var(node->value); // Local variable or parameter
     break;
   case TYPE_INT:
     cg_print_int(node->value);
@@ -156,7 +197,7 @@ static void cg_defvars(const ast_node *block) {
       continue;
     }
     if (stmt->node_type == NODE_VAR_DEF || stmt->node_type == NODE_VAL_DEF) {
-      printf("DEFVAR LF@%s\n", stmt->value);
+      printf("DEFVAR LF@%s$%d\n", stmt->value, ++cg_var_count);
     } else if (stmt->node_type == NODE_WHILE) {
       cg_defvars(stmt->right);
     } else if (stmt->node_type == NODE_IF && stmt->right != NULL) {
@@ -164,12 +205,6 @@ static void cg_defvars(const ast_node *block) {
       cg_defvars(stmt->right->right); // else block
     }
   }
-}
-
-// Stores value of a call or expression into a variable
-static void cg_store(const char *name, const ast_node *value) {
-  cg_expression(value);
-  printf("POPS LF@%s\n", name);
 }
 
 // Leaves the function, result must already be on the stack
@@ -183,12 +218,14 @@ static void cg_condition(const ast_node *cond) { cg_expression(cond); }
 
 // Generates all statements of a block (then/else branch or loop body)
 static void cg_block(const ast_node *block) {
+  int saved_top = cg_scope_top; // Variables of this block end with it
   for (; block != NULL && block->node_type == NODE_BLOCK;
        block = block->right) {
     if (block->left != NULL) {
       cg_statement(block->left);
     }
   }
+  cg_scope_top = saved_top;
 }
 
 // Generates if-then-else using jumps, else part may be missing
@@ -228,10 +265,13 @@ static void cg_statement(const ast_node *stmt) {
   switch (stmt->node_type) {
   case NODE_VAR_DEF:
   case NODE_VAL_DEF:
-    cg_store(stmt->value, stmt->right); // DEFVAR was done in cg_defvars
+    cg_expression(stmt->right); // Value may still use an outer variable
+    cg_declare(stmt->value);    // DEFVAR was done in cg_defvars
+    cg_pop_var(stmt->value);
     break;
   case NODE_ASSIGNMENT:
-    cg_store(stmt->left->value, stmt->right);
+    cg_expression(stmt->right);
+    cg_pop_var(stmt->left->value);
     break;
   case NODE_FUN_CALL:
     cg_fun_call(stmt);
@@ -284,8 +324,11 @@ static void cg_function(ast_node *def) {
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
   cg_params_defvar(def->left);
+  cg_var_count = 0;
   cg_defvars(body);
   cg_params_pop(def->left);
+  cg_var_count = 0; // Same numbers again while generating
+  cg_scope_top = 0;
   cg_body(body);
   cg_epilogue();
 }
