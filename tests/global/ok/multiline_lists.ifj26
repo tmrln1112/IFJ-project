@@ -1,0 +1,15 @@
+import ifj26.*
+
+
+def add(
+    a: Int,
+    b: Int,
+  ): Int = a + b
+
+@main def run(): Unit =
+  val result = add(
+      11,
+      31, // trailing comma
+    )
+  print(result)
+  print("\n")

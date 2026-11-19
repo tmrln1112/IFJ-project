@@ -15,6 +15,8 @@ typedef enum {
   S_OPERAND,    // id or literal
   S_END,        // $ 
 
+  S_PREFIX,     // unary -
+
   // Non terminal
   S_EXP,
 

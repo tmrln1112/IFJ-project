@@ -1,0 +1,6 @@
+import ifj26.*
+
+def f(): Int = "no"
+
+@main def run(): Unit =
+  ()

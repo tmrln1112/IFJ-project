@@ -11,6 +11,9 @@ ast_node *ast_create_node(node_type_t type, data_type_t data, char *value)
     }
     ptr->left = NULL;
     ptr->right = NULL;
+    ptr->widen_to_double = false;
+    ptr->discard_value = false;
+    ptr->if_has_value = false;
     ptr->node_type = type;
     ptr->data_type = data;
     ptr->value = value;
@@ -107,7 +110,7 @@ void ast_print_tree_rec(ast_node *node, int depth) {
     // Print node type and evaluated data type (omitting literal values)
     printf("Node: %s | DataType: %s | Value: %s\n", 
            node_type_to_string(node->node_type), 
-           data_type_to_string(node->data_type), node->value);
+           data_type_to_string(node->data_type), node->value ? node->value : "(null)");
 
     // Recursively print left and right subtrees
     ast_print_tree_rec(node->left, depth + 1);

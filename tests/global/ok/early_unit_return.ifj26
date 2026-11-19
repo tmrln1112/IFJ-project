@@ -1,0 +1,11 @@
+import ifj26.*
+
+
+def stop(): Unit =
+  while 1 == 1 do
+    return
+  print("unexpected")
+
+@main def run(): Unit =
+  stop()
+  print("done\n")

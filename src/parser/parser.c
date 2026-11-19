@@ -30,16 +30,17 @@ static bool is_EOF = false;
 /* Value used to store get_token return value*/
 static int scanner_err = 0;
 
-const precedence_type precedence_table[8][8] = {
+const precedence_type precedence_table[9][9] = {
   // [*, /]  [+, -]   REL   EQ    (      )      ID      $     
-  {P_POP,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP}, // [*, /]
-  {P_PUSH,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP}, // [+, -]
-  {P_PUSH,  P_PUSH, P_ERR, P_POP, P_PUSH, P_POP, P_PUSH, P_POP}, // REL [<, >, <=, >=]
-  {P_PUSH, P_PUSH, P_PUSH, P_ERR, P_PUSH, P_POP, P_PUSH, P_POP}, // EQ [!=, ==]
-  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_EQ, P_PUSH, P_ERR}, // (
-  {P_POP,  P_POP, P_POP, P_POP ,P_ERR, P_POP, P_ERR, P_POP}, // )
-  {P_POP,  P_POP, P_POP, P_POP, P_EQ, P_POP, P_ERR, P_POP}, // ID or LITERAL
-  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_ERR, P_PUSH, P_ERR}, // $
+  {P_POP,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // [*, /]
+  {P_PUSH,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // [+, -]
+  {P_PUSH,  P_PUSH, P_ERR, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // REL [<, >, <=, >=]
+  {P_PUSH, P_PUSH, P_PUSH, P_ERR, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // EQ [!=, ==]
+  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_EQ, P_PUSH, P_ERR, P_PUSH}, // (
+  {P_POP,  P_POP, P_POP, P_POP ,P_ERR, P_POP, P_ERR, P_POP, P_ERR}, // )
+  {P_POP,  P_POP, P_POP, P_POP, P_EQ, P_POP, P_ERR, P_POP, P_ERR}, // ID or LITERAL
+  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_ERR, P_PUSH, P_ERR, P_PUSH}, // $
+  {P_POP,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // unary -
 };
 
 symbol_type_t token_to_symbol_type(Token_type type) {
@@ -83,6 +84,7 @@ int symbol_type_to_int(symbol_type_t *type)
         case S_RPAR: return 5;
         case S_OPERAND: return 6;
         case S_END: return 7;
+        case S_PREFIX: return 8;
         default: return -1;
     }
 }
@@ -146,7 +148,7 @@ int expression_reduction(precedence_stack_t *stack)
 {   
     if (!stack) { return 99; }
 
-    stack_item_t first, second, third;
+    stack_item_t first = {0}, second = {0}, third = {0};
 
     if (prec_stack_pop(stack, &first) != 0) { return 2; }
 
@@ -171,23 +173,33 @@ int expression_reduction(precedence_stack_t *stack)
     {
         free(first.token.attribute);
 
-        if (prec_stack_pop(stack, &second) != 0 || second.type != S_EXP || !second.node) 
+        if (prec_stack_top(stack, &second) == 0 && second.type == S_LPAR)
         {
-            if (second.node) { ast_destroy(second.node); }
+            prec_stack_pop(stack, &second);
             free(second.token.attribute);
-            return 2;
+            sub_tree = ast_create_node(NODE_TERM, TYPE_UNIT, NULL);
+            if (!sub_tree) return 99;
         }
-        if (prec_stack_pop(stack, &third) != 0 || third.type != S_LPAR) 
+        else
         {
-            ast_destroy(second.node);
-            if (third.node) { ast_destroy(third.node); }
+            if (prec_stack_pop(stack, &second) != 0 || second.type != S_EXP || !second.node)
+            {
+                if (second.node) { ast_destroy(second.node); }
+                free(second.token.attribute);
+                return 2;
+            }
+            if (prec_stack_pop(stack, &third) != 0 || third.type != S_LPAR)
+            {
+                ast_destroy(second.node);
+                if (third.node) { ast_destroy(third.node); }
+                free(third.token.attribute);
+                return 2;
+            }
             free(third.token.attribute);
-            return 2;
-        }
-        free(third.token.attribute);
 
-        sub_tree = second.node;
-        second.node = NULL;
+            sub_tree = second.node;
+            second.node = NULL;
+        }
     }
 
     // Rule: E operator E -> E
@@ -200,18 +212,21 @@ int expression_reduction(precedence_stack_t *stack)
             ast_destroy(first.node);
             return 2;
         }
-        if (prec_stack_pop(stack, &third) != 0 || third.type != S_EXP || !third.node) 
+        bool unary = second.type == S_PREFIX;
+        if (!unary &&
+            (prec_stack_pop(stack, &third) != 0 || third.type != S_EXP || !third.node))
         {
             ast_destroy(first.node);
-            if (second.node) { ast_destroy(second.node); }
+            ast_destroy(second.node);
             free(second.token.attribute);
-            if (third.node) { ast_destroy(third.node); }
+            ast_destroy(third.node);
+            free(third.token.attribute);
             return 2;
         }
 
         char *op_str = op_token_to_str(second.token.type);
         free(second.token.attribute);
-        if (!op_str) 
+        if (!op_str)
         {
             ast_destroy(first.node);
             ast_destroy(third.node);
@@ -219,16 +234,15 @@ int expression_reduction(precedence_stack_t *stack)
         }
 
         sub_tree = ast_create_node(NODE_EXPRESSION, TYPE_NONE, op_str);
-        if (!sub_tree) 
+        if (!sub_tree)
         {
-            free(op_str);
             ast_destroy(first.node);
             ast_destroy(third.node);
             return 99;
         }
 
-        sub_tree->left = third.node;
-        sub_tree->right = first.node;
+        sub_tree->left = unary ? first.node : third.node;
+        sub_tree->right = unary ? NULL : first.node;
     }
     else 
     {
@@ -238,9 +252,7 @@ int expression_reduction(precedence_stack_t *stack)
     }
 
     // Adding sub_tree back to stack
-    stack_item_t exp_item;
-    exp_item.type = S_EXP;
-    exp_item.node = sub_tree;
+    stack_item_t exp_item = {.type = S_EXP, .node = sub_tree};
 
     if (prec_stack_push(stack, exp_item) != 0) 
     {
@@ -253,7 +265,8 @@ int expression_reduction(precedence_stack_t *stack)
 
 bool is_expression_stopper(Token_type type) 
 {
-    return (type == T_EOL || type == T_EOF || type == T_THEN || type == T_DO);
+    return (type == T_EOL || type == T_EOF || type == T_THEN || type == T_DO ||
+            type == T_SEMICOLON || type == T_DEDENT);
 }
 
 data_type_t token_type_to_node_type(Token_type type)
@@ -314,6 +327,11 @@ bool is_type_token(Token_type type)
 bool is_operand_token(Token_type type) 
 {
     return (type == T_ID || type == T_LIT_INT || type == T_LIT_DOUBLE || type == T_LIT_STRING);
+}
+
+static bool starts_expression(Token_type type)
+{
+    return is_operand_token(type) || type == T_LPAR || type == T_MINUS;
 }
 
 bool start_of_function_definition(void) 
@@ -467,6 +485,12 @@ int parse_expression(ast_node **node)
         else 
         {
             input_sym = token_to_symbol_type(current_token.type);
+            if (current_token.type == T_MINUS &&
+                stack.items[stack.top].type != S_EXP &&
+                stack.items[stack.top].type != S_OPERAND &&
+                stack.items[stack.top].type != S_RPAR) {
+                input_sym = S_PREFIX;
+            }
         }
 
         // If not a stopper and token_to_symbol_type fell back to S_END, it's an invalid token for an expression
@@ -588,6 +612,9 @@ int parse_arguments(ast_node **node)
             ast_destroy(*node);
             *node = NULL;
             return err;
+        }
+        if (valid_token && current_token.type == T_RPAR && current_token.newline_before) {
+            break;
         }
 
         if (!valid_token || !is_operand_token(current_token.type) || !current_token.attribute) 
@@ -719,7 +746,7 @@ int parse_assignment(ast_node **node)
         }
     }
 
-    else if (is_operand_token(current_token.type) || current_token.type == T_LPAR) 
+    else if (starts_expression(current_token.type))
     {
         int err = parse_expression(&(*node)->right);
         if (err != 0) 
@@ -831,26 +858,6 @@ int parse_block(ast_node **node)
     int err = skip_eol();
     if (err != 0) { return err; }
 
-    // Empty block
-    if (valid_token && current_token.type == T_LPAR) 
-    {
-        err = advance_token();
-        if (err != 0) { return err; }
-        if (!match_tokens(T_RPAR)) { return parser_or_scanner_err(); }
-
-        *node = ast_create_node(NODE_BLOCK, TYPE_NONE, NULL);
-        if (!*node) { return 99; }
-
-        err = skip_eol();
-        if (err != 0)
-        {
-            ast_destroy(*node);
-            *node = NULL;
-            return err;
-        }
-        return 0;
-    }
-
     ast_node **last = node;
 
     while (valid_token && current_token.type != T_DEDENT) 
@@ -892,7 +899,7 @@ int parse_block(ast_node **node)
                 return 99;
             }
 
-            if (valid_token && current_token.type != T_EOL) 
+            if (valid_token && !is_expression_stopper(current_token.type))
             {
                 if (valid_token && valid_look_ahead && current_token.type == T_ID && look_ahead_token.type == T_LPAR)
                 {
@@ -1118,7 +1125,7 @@ int parse_block(ast_node **node)
         }
 
         // EXPRESSION
-        else if (valid_token && is_operand_token(current_token.type)) 
+        else if (valid_token && starts_expression(current_token.type))
         {
             err = parse_expression(&((*last)->left));
             if (err != 0)
@@ -1137,7 +1144,10 @@ int parse_block(ast_node **node)
         }
 
         last = &((*last)->right);
-        err = skip_eol();
+        if (valid_token && current_token.type == T_SEMICOLON) {
+            err = advance_token();
+        }
+        if (err == 0) err = skip_eol();
         if (err != 0) 
         {
             ast_destroy(*node);
@@ -1179,7 +1189,7 @@ int parse_fun_body(ast_node **node)
         int err = parse_fun_call(node);  
         if (err != 0) { return err; } 
     }
-    else if (is_operand_token(current_token.type) || current_token.type == T_LPAR) 
+    else if (starts_expression(current_token.type))
     {
         int err = parse_expression(node);
         if (err != 0) { return err; }
@@ -1271,6 +1281,9 @@ int parse_param(ast_node **node)
             ast_destroy(*node);
             *node = NULL;
             return err;
+        }
+        if (valid_token && current_token.type == T_RPAR && current_token.newline_before) {
+            break;
         }
 
         if (!valid_token || !current_token.attribute) 

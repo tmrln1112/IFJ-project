@@ -1,0 +1,19 @@
+import ifj26.*
+
+@main def run(): Unit =
+  if "ab" < "abc" then
+    print("A")
+  else
+    print("bad")
+  if 2 >= 2.0 then
+    print("B")
+  else
+    print("bad")
+  if 3 <= 2 then
+    print("bad")
+  else
+    print("C")
+  if "x" != "y" then
+    print("D\n")
+  else
+    print("bad")

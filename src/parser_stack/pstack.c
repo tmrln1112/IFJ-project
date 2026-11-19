@@ -73,9 +73,10 @@ int prec_stack_top_terminal(precedence_stack_t *stack, stack_item_t *item)
 
 void prec_stack_free(precedence_stack_t *stack) 
 {
-    if (!stack || stack->top <= -1) { return; }
+    if (!stack) { return; }
     for (int i = 0; i <= stack->top; i++) 
     {
+        free(stack->items[i].token.attribute);
         if (stack->items[i].node) 
         {
             ast_destroy(stack->items[i].node);

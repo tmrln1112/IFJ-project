@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val idx = readInt()
+  val result = subStr("abc", idx, 3)
+  print(result)

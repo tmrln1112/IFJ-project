@@ -65,7 +65,7 @@ int main(int argc, char *argv[]) {
   } else if (strcmp(argv[1], "operand") == 0) {
     char *value;
     data_type_t type = split_operand(buf, &value);
-    ast_node node = {NODE_TERM, type, value, NULL, NULL};
+    ast_node node = {.node_type = NODE_TERM, .data_type = type, .value = value};
     cg_print_operand(&node);
   } else if (strcmp(argv[1], "call") == 0) {
     // Input: first line is the function name, then one argument per line
@@ -76,13 +76,13 @@ int main(int argc, char *argv[]) {
     while (count < 16 && (line = strtok(NULL, "\n")) != NULL) {
       char *value;
       data_type_t type = split_operand(line, &value);
-      args[count] = (ast_node){NODE_ARGUMENT, type, value, NULL, NULL};
+      args[count] = (ast_node){.node_type = NODE_ARGUMENT, .data_type = type, .value = value};
       if (count > 0) {
         args[count - 1].left = &args[count]; // Link previous argument to this
       }
       count++;
     }
-    ast_node call = {NODE_FUN_CALL, TYPE_ID, name, NULL, NULL};
+    ast_node call = {.node_type = NODE_FUN_CALL, .data_type = TYPE_ID, .value = name};
     if (count > 0) {
       call.left = &args[0];
     }

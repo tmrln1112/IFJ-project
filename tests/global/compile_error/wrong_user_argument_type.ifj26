@@ -1,0 +1,6 @@
+import ifj26.*
+
+def echo(x: Int): Int = x
+
+@main def run(): Unit =
+  echo("text")

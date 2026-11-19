@@ -1,0 +1,4 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val n: Int = 3.5

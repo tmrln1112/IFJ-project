@@ -1,0 +1,13 @@
+import ifj26.*
+
+
+def drop(x: Int): Unit =
+  return x
+
+def take(x: Unit): Unit = x
+
+@main
+def run(): Unit =
+  val u: Unit = drop(42)
+  val v = take(u)
+  print(v)

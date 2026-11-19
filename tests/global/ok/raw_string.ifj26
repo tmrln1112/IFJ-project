@@ -1,0 +1,6 @@
+import ifj26.*
+
+@main def run(): Unit =
+  val s = """A
+  B\n"""
+  print(s)
