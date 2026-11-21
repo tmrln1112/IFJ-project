@@ -227,7 +227,7 @@ typedef enum {
   /* ---------- Initial & Identifier states ---------- */
   STATE_START,      // S: initial state, skips whitespace
   STATE_ID,         // ID: identifier or keyword
-  STATE_UNDERSCORE, // Q1: read a leading '_', needs one more character
+  STATE_UNDERSCORE, // Q1: read '_', final as lone underscore
   /* ---------- Integer states ---------- */
   STATE_ZERO,           // ZERO: read a '0'
   STATE_INT,            // INT: integer that started with 1-9
@@ -474,12 +474,14 @@ int get_token(Token *token) {
       }
 
     case STATE_UNDERSCORE:
-      // Standalone '_' is forbidden. Must be followed by alnum or another '_'
+      // '_' followed by alnum or '_' starts an identifier, otherwise it is
+      // a lone underscore token
       if (isalnum(c) || c == '_') {
         dynstr_append(&buffer, (char)c);
         state = STATE_ID;
       } else {
-        return lex_error(&buffer);
+        ungetc(c, source_file);
+        return emit(token, &buffer, T_UNDERSCORE);
       }
       break;
 
