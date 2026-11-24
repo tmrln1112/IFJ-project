@@ -12,6 +12,8 @@ typedef enum {
     P_ERR, 
 } precedence_type;
 
+symbol_type_t check_add_sub_arity(Token_type type, precedence_stack_t *stack);
+
 symbol_type_t token_to_symbol_type(Token_type type);
 
 int symbol_type_to_int(symbol_type_t *type);
@@ -53,6 +55,8 @@ int parse_fun_call(ast_node **node);
 int parse_assignment(ast_node **node);
 
 int parse_var_val(ast_node **node);
+
+int parse_else(ast_node **node);
 
 int parse_block(ast_node **node);
 

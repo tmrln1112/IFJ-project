@@ -78,7 +78,6 @@ const char *node_type_to_string(node_type_t type) {
         case NODE_ARGUMENT: return "ARGUMENT";
         case NODE_TERM: return "TERM";
         case NODE_EXPRESSION: return "EXPRESSION";
-        case NODE_CONDITION: return "CONDITION";
         default: return "UNKNOWN_NODE";
     }
 }
@@ -92,6 +91,7 @@ const char *data_type_to_string(data_type_t type) {
         case TYPE_DOUBLE: return "DOUBLE";
         case TYPE_STRING: return "STRING";
         case TYPE_UNIT: return "UNIT";
+        case TYPE_BOOL: return "BOOL";
         default: return "UNKNOWN_TYPE";
     }
 }

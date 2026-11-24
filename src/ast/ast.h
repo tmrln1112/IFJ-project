@@ -10,6 +10,7 @@ typedef enum {
     TYPE_INT,
     TYPE_DOUBLE,
     TYPE_STRING,
+    TYPE_BOOL,
     TYPE_UNIT
 } data_type_t;
 
@@ -61,7 +62,7 @@ typedef enum {
                           // L: NODE_CONDITION; R: NODE_IF_BODY | NULL
 
     NODE_IF_BODY,         // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_BLOCK (if-then); R: NODE_BLOCK (else)
+                          // L: NODE_BLOCK ; R: NODE_BLOCK | NODE_IF_BODY
 
     NODE_WHILE,           // value: NULL; data_type: TYPE_NONE
                           // L: NODE_CONDITION; R: NODE_BLOCK
@@ -76,7 +77,7 @@ typedef enum {
                           // L: NULL; R: NULL
 
     NODE_EXPRESSION,      // value: operator; L: operand; R: second operand or NULL
-    NODE_CONDITION        // compatibility node for condition subtrees
+    NODE_CONDITION,       // 
 } node_type_t;
 
 typedef struct ast_node {

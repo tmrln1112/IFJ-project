@@ -30,17 +30,20 @@ static bool is_EOF = false;
 /* Value used to store get_token return value*/
 static int scanner_err = 0;
 
-const precedence_type precedence_table[9][9] = {
-  // [*, /]  [+, -]   REL   EQ    (      )      ID      $     
-  {P_POP,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // [*, /]
-  {P_PUSH,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // [+, -]
-  {P_PUSH,  P_PUSH, P_ERR, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // REL [<, >, <=, >=]
-  {P_PUSH, P_PUSH, P_PUSH, P_ERR, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // EQ [!=, ==]
-  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_EQ, P_PUSH, P_ERR, P_PUSH}, // (
-  {P_POP,  P_POP, P_POP, P_POP ,P_ERR, P_POP, P_ERR, P_POP, P_ERR}, // )
-  {P_POP,  P_POP, P_POP, P_POP, P_EQ, P_POP, P_ERR, P_POP, P_ERR}, // ID or LITERAL
-  {P_PUSH,  P_PUSH, P_PUSH, P_PUSH ,P_PUSH, P_ERR, P_PUSH, P_ERR, P_PUSH}, // $
-  {P_POP,  P_POP, P_POP, P_POP, P_PUSH, P_POP, P_PUSH, P_POP, P_PUSH}, // unary -
+const precedence_type precedence_table[12][12] = {
+//  !      unary -  [*, /]  [+, -]  REL      EQ     &&      ||      (       )        ID      $
+  {P_PUSH, P_PUSH, P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // ! 
+  {P_PUSH, P_PUSH, P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // unary -
+  {P_PUSH, P_PUSH, P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // [*, /]
+  {P_PUSH, P_PUSH, P_PUSH, P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // [+, -]
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_ERR,  P_POP,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // REL
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_ERR,  P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // EQ
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_POP,  P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // &&
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_POP,  P_PUSH, P_POP,  P_PUSH, P_POP}, // ||
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_EQ,   P_PUSH, P_ERR}, // (
+  {P_ERR,  P_ERR,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_ERR,  P_POP,  P_ERR,  P_POP}, // )
+  {P_ERR,  P_ERR,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_POP,  P_ERR,  P_POP,  P_ERR,  P_POP}, // ID or literal 
+  {P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_PUSH, P_ERR,  P_PUSH, P_ERR}, // $
 };
 
 symbol_type_t token_to_symbol_type(Token_type type) {
@@ -67,7 +70,12 @@ symbol_type_t token_to_symbol_type(Token_type type) {
         case T_LIT_INT:
         case T_LIT_DOUBLE:
         case T_LIT_STRING:
+        case T_TRUE:
+        case T_FALSE:
             return S_OPERAND;
+        case T_NOT: return S_NOT;
+        case T_AND: return S_AND;
+        case T_OR: return S_OR;
         default:
             return S_END;
     }
@@ -75,17 +83,20 @@ symbol_type_t token_to_symbol_type(Token_type type) {
 
 int symbol_type_to_int(symbol_type_t *type)
 {
-    switch(*type) {
-        case S_MUL_DIV: return 0;
-        case S_ADD_SUB: return 1;
-        case S_REL_OP: return 2;
-        case S_EQ_OP: return 3;
-        case S_LPAR: return 4;
-        case S_RPAR: return 5;
-        case S_OPERAND: return 6;
-        case S_END: return 7;
-        case S_PREFIX: return 8;
-        default: return -1;
+        switch (*type) {
+        case S_NOT:       return 0;
+        case S_PREFIX:    return 1;
+        case S_MUL_DIV:   return 2;
+        case S_ADD_SUB:   return 3;
+        case S_REL_OP:    return 4;
+        case S_EQ_OP:     return 5;
+        case S_AND:       return 6;
+        case S_OR:        return 7;
+        case S_LPAR:      return 8;
+        case S_RPAR:      return 9;
+        case S_OPERAND:   return 10;
+        case S_END:       return 11;
+        default:          return -1;
     }
 }
 
@@ -102,6 +113,9 @@ char *op_token_to_str(Token_type type)
         case T_GREATER_OR_EQ:   return ">=";
         case T_EQ:              return "==";
         case T_NEQ:             return "!=";
+        case T_NOT:             return "!";
+        case T_AND:             return "&&";
+        case T_OR:              return "||";
         default:                return NULL;
     }
 }
@@ -212,7 +226,7 @@ int expression_reduction(precedence_stack_t *stack)
             ast_destroy(first.node);
             return 2;
         }
-        bool unary = second.type == S_PREFIX;
+        bool unary = (second.type == S_PREFIX || second.type == S_NOT);
         if (!unary &&
             (prec_stack_pop(stack, &third) != 0 || third.type != S_EXP || !third.node))
         {
@@ -273,13 +287,16 @@ data_type_t token_type_to_node_type(Token_type type)
 {
     switch (type) {
         case T_ID: return TYPE_ID;
-        case T_DOUBLE: return TYPE_DOUBLE;
-        case T_INT: return TYPE_INT;
-        case T_STRING: return TYPE_STRING;
-        case T_UNIT: return TYPE_UNIT;
+        case T_DOUBLE:
         case T_LIT_DOUBLE: return TYPE_DOUBLE;
+        case T_INT:
         case T_LIT_INT: return TYPE_INT;
+        case T_STRING:
         case T_LIT_STRING: return TYPE_STRING;
+        case T_UNIT: return TYPE_UNIT;
+        case T_BOOLEAN:
+        case T_TRUE:
+        case T_FALSE: return TYPE_BOOL;
         default: return TYPE_NONE;
     }
 }
@@ -321,17 +338,26 @@ int skip_whitespace(void)
 
 bool is_type_token(Token_type type) 
 {
-    return (type == T_INT || type == T_DOUBLE || type == T_STRING || type == T_UNIT);
+    return (type == T_INT ||
+            type == T_DOUBLE ||
+            type == T_STRING ||
+            type == T_UNIT ||
+            type == T_BOOLEAN);
 }
 
 bool is_operand_token(Token_type type) 
 {
-    return (type == T_ID || type == T_LIT_INT || type == T_LIT_DOUBLE || type == T_LIT_STRING);
+    return (type == T_ID ||
+            type == T_LIT_INT ||
+            type == T_LIT_DOUBLE ||
+            type == T_LIT_STRING ||
+            type == T_TRUE ||
+            type == T_FALSE);
 }
 
 static bool starts_expression(Token_type type)
 {
-    return is_operand_token(type) || type == T_LPAR || type == T_MINUS;
+    return is_operand_token(type) || type == T_LPAR || type == T_MINUS || type == T_NOT;
 }
 
 bool start_of_function_definition(void) 
@@ -581,6 +607,18 @@ int parse_arguments(ast_node **node)
     if (valid_token && current_token.type == T_RPAR) { return 0; }
 
     // Single argument
+    if (valid_token && current_token.type == T_LPAR && valid_look_ahead && look_ahead_token.type == T_RPAR)
+    {
+        int err = advance_token();
+        if (err != 0) { return err; }
+        err = advance_token();
+        if (err != 0) { return err; }
+
+        *node = ast_create_node(NODE_ARGUMENT, TYPE_UNIT, strdup("()"));
+        if (!*node) { return 99; }
+        return 0;
+    } 
+
     if (!valid_token || !is_operand_token(current_token.type) || !current_token.attribute) { return parser_or_scanner_err(); }
     char *arg_id = strdup(current_token.attribute);
     if (!arg_id) { return 99; }
@@ -851,6 +889,140 @@ int parse_var_val(ast_node **node)
     return 0;
 }
 
+int parse_if(ast_node **node)
+{
+    *node = NULL;
+
+    int err = advance_token();
+    if (err != 0) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return err;
+    }
+
+    *node = ast_create_node(NODE_IF, TYPE_NONE, NULL);
+    if (!*node) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return 99;
+    }
+
+    err = parse_expression(&(*node)->left);
+    if (err != 0) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return err;
+    }
+    if (!match_tokens(T_THEN)) 
+    { 
+        ast_destroy(*node);
+        *node = NULL;
+        return parser_or_scanner_err();
+    }
+    if (!match_tokens(T_EOL)) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return parser_or_scanner_err();
+    }
+    if (!match_tokens(T_INDENT)) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return parser_or_scanner_err();
+    }
+
+    (*node)->right = ast_create_node(NODE_IF_BODY, TYPE_NONE, NULL);
+    if (!(*node)->right) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return 99;
+    }
+
+    err = parse_block(&(*node)->right->left);
+    if (err != 0) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return err;
+    }
+    if (!match_tokens(T_DEDENT)) 
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return parser_or_scanner_err();
+    }
+
+    err = parse_else(&(*node)->right->right);
+    if (err != 0)
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return err;
+    }
+    return 0;
+}
+
+int parse_else(ast_node **node)
+{
+    *node = NULL;
+    if (current_token.type != T_ELSE)
+    {
+        return 0;
+    }
+    if (!match_tokens(T_ELSE))
+    {
+        ast_destroy(*node);
+        *node = NULL;
+        return parser_or_scanner_err();
+    }
+    if (current_token.type == T_IF)
+    {
+        int err = parse_if(node);
+        if (err != 0)
+        {
+            ast_destroy(*node);
+            *node = NULL;
+            return err;
+        }
+        return 0;
+    }
+    else 
+    {
+        if (!match_tokens(T_EOL))
+        {
+            ast_destroy(*node);
+            *node = NULL;
+            return parser_or_scanner_err();
+        }
+        if (!match_tokens(T_INDENT)) 
+        {
+            ast_destroy(*node);
+            *node = NULL;
+            return parser_or_scanner_err();
+        }
+
+        int err = parse_block(node);
+        if (err != 0) 
+        {
+            ast_destroy(*node);
+            *node = NULL;
+            return err;
+        }
+        if (!match_tokens(T_DEDENT)) 
+        {
+            ast_destroy(*node);
+            *node = NULL;
+            return parser_or_scanner_err();
+        }
+        return 0;
+    }
+}
+
 int parse_block(ast_node **node) 
 {
     *node = NULL;
@@ -927,99 +1099,12 @@ int parse_block(ast_node **node)
         // IF statement
         else if (valid_token && current_token.type == T_IF) 
         {
-            err = advance_token();
-            if (err != 0) {
-                ast_destroy(*node);
-                *node = NULL;
-                return err;
-            }
-
-            (*last)->left = ast_create_node(NODE_IF, TYPE_NONE, NULL);
-            if (!(*last)->left) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return 99;
-            }
-
-            err = parse_expression(&(*last)->left->left);
-            if (err != 0) 
+            err = parse_if(&(*last)->left);
+            if (err != 0)
             {
                 ast_destroy(*node);
                 *node = NULL;
                 return err;
-            }
-            if (!match_tokens(T_THEN)) 
-            { 
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-            if (!match_tokens(T_EOL)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-            if (!match_tokens(T_INDENT)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-
-            (*last)->left->right = ast_create_node(NODE_IF_BODY, TYPE_NONE, NULL);
-            if (!(*last)->left->right) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return 99;
-            }
-
-            err = parse_block(&(*last)->left->right->left);
-            if (err != 0) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return err;
-            }
-            if (!match_tokens(T_DEDENT)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-            if (!match_tokens(T_ELSE)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-            if (!match_tokens(T_EOL))
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-            if (!match_tokens(T_INDENT)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
-            }
-
-            err = parse_block(&(*last)->left->right->right);
-            if (err != 0) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return err;
-            }
-            if (!match_tokens(T_DEDENT)) 
-            {
-                ast_destroy(*node);
-                *node = NULL;
-                return parser_or_scanner_err();
             }
         }
 

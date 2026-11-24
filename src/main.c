@@ -19,6 +19,7 @@ int main(void) {
   ast_node *root = NULL;
   int result = parse_program(&root);
   if (result == 0) {
+    ast_print_tree(root); // remove
     result = semantic_analyze_parser_ast(root);
   }
   if (result == 0) {
