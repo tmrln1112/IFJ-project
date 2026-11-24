@@ -16,12 +16,13 @@ typedef enum {
   T_INDENT, // indentation
   T_DEDENT, // dedentation
 
-  T_SEMICOLON, // semicolon ;
-  T_COLON,     // colon :
-  T_COMMA,     // comma ,
-  T_DOT,       // dot .
-  T_LPAR,      // left parenthesis (
-  T_RPAR,      // right parenthesis )
+  T_SEMICOLON,  // semicolon ;
+  T_COLON,      // colon :
+  T_COMMA,      // comma ,
+  T_DOT,        // dot .
+  T_UNDERSCORE, // lone underscore _
+  T_LPAR,       // left parenthesis (
+  T_RPAR,       // right parenthesis )
 
   T_ID,         // identifier
   T_LIT_INT,    // literal integer

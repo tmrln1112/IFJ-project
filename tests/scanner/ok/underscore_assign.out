@@ -1,0 +1,5 @@
+Line 1 | Token: T_UNDERSCORE    | Attr: NULL
+Line 1 | Token: T_ASSIGN        | Attr: NULL
+Line 1 | Token: T_LIT_INT       | Attr: 1
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 2 | Token: T_EOF           | Attr: NULL

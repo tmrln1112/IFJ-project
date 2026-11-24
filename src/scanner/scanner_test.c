@@ -117,6 +117,8 @@ const char *token_type_to_string(Token_type type) {
     return "T_COMMA";
   case T_DOT:
     return "T_DOT";
+  case T_UNDERSCORE:
+    return "T_UNDERSCORE";
   default:
     return "UNKNOWN_TOKEN";
   }
