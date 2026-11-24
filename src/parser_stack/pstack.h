@@ -6,16 +6,18 @@
 
 typedef enum {
   // Terminals
+  S_NOT,        // !
+  S_PREFIX,     // unary -
   S_MUL_DIV,    // *, /
   S_ADD_SUB,    // +, -
   S_REL_OP,     // <, >, <=, >=
   S_EQ_OP,      // ==, !=
+  S_AND,        // &&
+  S_OR,         // ||
   S_LPAR,       // (
   S_RPAR,       // )
   S_OPERAND,    // id or literal
-  S_END,        // $ 
-
-  S_PREFIX,     // unary -
+  S_END,        // $ (stopper)
 
   // Non terminal
   S_EXP,
