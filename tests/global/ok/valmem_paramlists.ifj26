@@ -1,0 +1,9 @@
+import ifj26.*
+
+def suffix: String = "!"
+def combine(a: String)()(b: String): String = a + b
+
+@main def run(): Unit =
+  val text = combine(("abc" + "d").length.toString)()(suffix)
+  print(text)
+  print((-1.5).floor.toInt.toString)

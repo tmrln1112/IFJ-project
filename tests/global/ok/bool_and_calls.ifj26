@@ -1,0 +1,16 @@
+import ifj26.*
+
+def increment(n: Int): Int = n + 1
+
+def failIfCalled(): Boolean =
+  val zero = 0
+  1 / zero == 0
+
+@main def run(): Unit =
+  val condition: Boolean = !false && (true || failIfCalled())
+  if false && failIfCalled() then
+    print("wrong")
+  else if condition then
+    print(increment(increment(1)) + 1)
+  else
+    print("wrong")
