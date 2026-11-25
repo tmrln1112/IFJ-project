@@ -11,6 +11,8 @@ ast_node *ast_create_node(node_type_t type, data_type_t data, char *value)
     }
     ptr->left = NULL;
     ptr->right = NULL;
+    ptr->bare_call = false;
+    ptr->inclusive_range = false;
     ptr->widen_to_double = false;
     ptr->discard_value = false;
     ptr->if_has_value = false;
@@ -78,6 +80,9 @@ const char *node_type_to_string(node_type_t type) {
         case NODE_ARGUMENT: return "ARGUMENT";
         case NODE_TERM: return "TERM";
         case NODE_EXPRESSION: return "EXPRESSION";
+        case NODE_MEMBER: return "MEMBER";
+        case NODE_LIST: return "LIST";
+        case NODE_FOR: return "FOR";
         case NODE_CONDITION: return "CONDITION";
         default: return "UNKNOWN_NODE";
     }
@@ -92,6 +97,7 @@ const char *data_type_to_string(data_type_t type) {
         case TYPE_DOUBLE: return "DOUBLE";
         case TYPE_STRING: return "STRING";
         case TYPE_UNIT: return "UNIT";
+        case TYPE_BOOL: return "BOOL";
         default: return "UNKNOWN_TYPE";
     }
 }

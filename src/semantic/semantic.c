@@ -290,7 +290,7 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
     ASTNode *body_node = fn->ast_node ? fn->ast_node->body : NULL;
     if (body_node) {
         ASTNode *last_node = get_last_expr_node(body_node);
-        if (last_node && last_node->kind == AST_IF) {
+        if (last_node && last_node->kind == AST_IF && last_node->else_branch) {
             if (!fn->has_explicit_return || fn->return_type != (DataType)TYPE_UNIT) {
                 last_node->is_expression = true;
             }
@@ -519,6 +519,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                 }
             }
 
+            if (node->parser_node) node->parser_node->bare_call = true;
             node->is_func_call = true;
             node->sem_type = fn->return_type;
             return fn->return_type;
@@ -1062,6 +1063,7 @@ static DataType map_parser_dtype(data_type_t dt) {
         case TYPE_INT:    return (DataType)TYPE_INT;
         case TYPE_DOUBLE: return (DataType)TYPE_DOUBLE;
         case TYPE_STRING: return (DataType)TYPE_STRING;
+        case TYPE_BOOL:   return TYPE_BOOLEAN;
         case TYPE_UNIT:   return (DataType)TYPE_UNIT;
         default:          return TYPE_UNKNOWN;
     }
@@ -1137,6 +1139,29 @@ static ASTNode *convert_parser_node_impl(ast_node *pnode) {
             return ifn;
         }
 
+        case NODE_FOR: {
+            ASTNode *loop = alloc_sem_node(AST_FOR);
+            if (!loop) return NULL;
+            ast_node *start = pnode->left;
+            ast_node *end = start->right;
+            ast_node *step = end->right;
+            loop->iter_name = sem_strdup(pnode->value);
+            loop->from_expr = convert_parser_node(start->left);
+            loop->end_expr = convert_parser_node(end->left);
+            loop->step_expr = convert_parser_node(step->left);
+            loop->is_until = !pnode->inclusive_range;
+            loop->body = convert_parser_node(pnode->right);
+            size_t count = 0;
+            for (ast_node *g = step->right; g; g = g->right) count++;
+            if (count) {
+                loop->guards = calloc(count, sizeof(ASTNode *));
+                if (!loop->guards) { semantic_ast_free(loop); return NULL; }
+                for (ast_node *g = step->right; g; g = g->right)
+                    loop->guards[loop->guard_count++] = convert_parser_node(g->left);
+            }
+            return loop;
+        }
+
         case NODE_WHILE: {
             ASTNode *wh = alloc_sem_node(AST_WHILE);
             if (!wh) return NULL;
@@ -1150,21 +1175,36 @@ static ASTNode *convert_parser_node_impl(ast_node *pnode) {
             if (!call) return NULL;
             call->name = sem_strdup(pnode->value);
             call->has_parens = true;
-            call->num_arg_lists = 1;
-            call->arg_lists = (ArgList *)calloc(1, sizeof(ArgList));
+            for (ast_node *list = pnode->left; list; list = list->right)
+                call->num_arg_lists++;
+            call->arg_lists = calloc(call->num_arg_lists, sizeof(ArgList));
             if (!call->arg_lists) { semantic_ast_free(call); return NULL; }
 
-            size_t acount = 0;
-            for (ast_node *a = pnode->left; a != NULL; a = a->left) acount++;
-            call->arg_lists[0].count = acount;
-            if (acount > 0) {
-                call->arg_lists[0].args = (ASTNode **)calloc(acount, sizeof(ASTNode *));
-                size_t idx = 0;
-                for (ast_node *a = pnode->left; a != NULL; a = a->left) {
-                    call->arg_lists[0].args[idx++] = convert_parser_node(a);
+            size_t group = 0;
+            for (ast_node *list = pnode->left; list; list = list->right, group++) {
+                ArgList *args = &call->arg_lists[group];
+                for (ast_node *a = list->left; a; a = a->left) args->count++;
+                if (!args->count) continue;
+                args->args = calloc(args->count, sizeof(ASTNode *));
+                if (!args->args) {
+                    args->count = 0;
+                    semantic_ast_free(call);
+                    return NULL;
                 }
+                size_t idx = 0;
+                for (ast_node *a = list->left; a; a = a->left)
+                    args->args[idx++] = convert_parser_node(a->right);
             }
             return call;
+        }
+
+        case NODE_MEMBER: {
+            ASTNode *member = alloc_sem_node(AST_MEMBER_ACCESS);
+            if (!member) return NULL;
+            member->receiver = convert_parser_node(pnode->left);
+            member->member_name = sem_strdup(pnode->value);
+            member->has_parens = pnode->right != NULL;
+            return member;
         }
 
         case NODE_ARGUMENT:
@@ -1189,10 +1229,11 @@ static ASTNode *convert_parser_node_impl(ast_node *pnode) {
         case NODE_CONDITION: {
             if (!pnode->value) return convert_parser_node(pnode->left);
 
-            if (!pnode->right && strcmp(pnode->value, "-") == 0) {
+            if (!pnode->right && (strcmp(pnode->value, "-") == 0 ||
+                                  strcmp(pnode->value, "!") == 0)) {
                 ASTNode *unary = alloc_sem_node(AST_UNOP);
                 if (!unary) return NULL;
-                unary->op = OP_NEG;
+                unary->op = pnode->value[0] == '!' ? OP_NOT : OP_NEG;
                 unary->operand = convert_parser_node(pnode->left);
                 return unary;
             }
@@ -1260,21 +1301,34 @@ int semantic_analyze_parser_ast(ast_node *parser_root) {
         }
         fn->name = sem_strdup(fdef->value);
         fn->is_main = (cur->node_type == NODE_MAIN_FUNCTION);
-        fn->has_parens = true;
-        fn->num_param_lists = 1;
-        fn->param_lists = (ParamList *)calloc(1, sizeof(ParamList));
-
-        size_t pcount = 0;
-        for (ast_node *p = fdef->left; p != NULL; p = p->left) pcount++;
-        fn->param_lists[0].count = pcount;
-        if (pcount > 0) {
-            fn->param_lists[0].types = (DataType *)calloc(pcount, sizeof(DataType));
-            fn->param_lists[0].names = (char **)calloc(pcount, sizeof(char *));
-            size_t pidx = 0;
-            for (ast_node *p = fdef->left; p != NULL; p = p->left) {
-                fn->param_lists[0].types[pidx] = map_parser_dtype(p->data_type);
-                fn->param_lists[0].names[pidx] = sem_strdup(p->value);
-                pidx++;
+        prog->items[idx++] = fn;
+        prog->item_count = idx;
+        fn->has_parens = fdef->left != NULL;
+        for (ast_node *list = fdef->left; list; list = list->right)
+            fn->num_param_lists++;
+        if (fn->has_parens) {
+            fn->param_lists = calloc(fn->num_param_lists, sizeof(ParamList));
+            if (!fn->param_lists) { semantic_ast_free(prog); return SEM_ERR_INTERNAL; }
+        }
+        size_t group = 0;
+        for (ast_node *list = fdef->left; list; list = list->right, group++) {
+            ParamList *params = &fn->param_lists[group];
+            for (ast_node *p = list->left; p; p = p->left) params->count++;
+            if (!params->count) continue;
+            params->types = calloc(params->count, sizeof(DataType));
+            params->names = calloc(params->count, sizeof(char *));
+            if (!params->types || !params->names) {
+                semantic_ast_free(prog);
+                return SEM_ERR_INTERNAL;
+            }
+            size_t index = 0;
+            for (ast_node *p = list->left; p; p = p->left, index++) {
+                params->types[index] = map_parser_dtype(p->data_type);
+                params->names[index] = sem_strdup(p->value);
+                if (!params->names[index]) {
+                    semantic_ast_free(prog);
+                    return SEM_ERR_INTERNAL;
+                }
             }
         }
 
@@ -1285,10 +1339,7 @@ int semantic_analyze_parser_ast(ast_node *parser_root) {
             }
             fn->body = convert_parser_node(fdef->right->right);
         }
-
-        prog->items[idx++] = fn;
     }
-    prog->item_count = idx;
 
     int res = semantic_analyze(prog);
     semantic_ast_free(prog);

@@ -12,7 +12,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "symtable.h"
-#include "../ast/ast.h"
+#include "ast.h"
 
 /**
  * Semantic error codes according to IFJ26 specification:

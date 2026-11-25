@@ -10,6 +10,7 @@ typedef enum {
     TYPE_INT,
     TYPE_DOUBLE,
     TYPE_STRING,
+    TYPE_BOOL,
     TYPE_UNIT
 } data_type_t;
 
@@ -23,7 +24,7 @@ typedef enum {
                           // R: NODE_FUNCTION | NODE_MAIN_FUNCTION | NULL
 
     NODE_FUN_DEF,         // first: value: id of function; data_type: TYPE_ID
-                          //        L: NODE_PARAMETER | NULL
+                          //        L: NODE_LIST | NULL
                           //        R: second NODE_FUN_DEF
 
                           // second: value: NULL; data_type: TYPE_NONE
@@ -61,22 +62,25 @@ typedef enum {
                           // L: NODE_CONDITION; R: NODE_IF_BODY | NULL
 
     NODE_IF_BODY,         // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_BLOCK (if-then); R: NODE_BLOCK (else)
+                          // L: then block; R: else block or NULL
 
     NODE_WHILE,           // value: NULL; data_type: TYPE_NONE
                           // L: NODE_CONDITION; R: NODE_BLOCK
 
     NODE_FUN_CALL,        // value: id of function; data_type: TYPE_ID
-                          // L: NODE_ARGUMENT | NULL; R: NULL
+                          // L: NODE_LIST; R: NULL
 
-    NODE_ARGUMENT,        // value: id or literal; data_type: type of value
-                          // L: NODE_ARGUMENT | NULL; R: NULL
+    NODE_ARGUMENT,        // L: next argument; R: argument expression
+                          // A leaf argument can also carry its own value and type
 
     NODE_TERM,            // value: id or literal | NULL; data_type: type of value
                           // L: NULL; R: NULL
 
     NODE_EXPRESSION,      // value: operator; L: operand; R: second operand or NULL
-    NODE_CONDITION        // compatibility node for condition subtrees
+    NODE_MEMBER,          // L: receiver; R: optional argument lists
+    NODE_LIST,            // L: items; R: next parenthesized list
+    NODE_FOR,             // L: range; R: loop body; value: iterator name
+    NODE_CONDITION,       //
 } node_type_t;
 
 typedef struct ast_node {
@@ -85,6 +89,8 @@ typedef struct ast_node {
     char *value;
     struct ast_node *left;
     struct ast_node *right;
+    bool bare_call;
+    bool inclusive_range;
     bool widen_to_double;
     bool discard_value;
     bool if_has_value;

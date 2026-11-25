@@ -93,6 +93,9 @@ void cg_print_operand(const ast_node *node) {
   case TYPE_DOUBLE:
     cg_print_float(node->value);
     break;
+  case TYPE_BOOL:
+    printf("bool@%s", node->value);
+    break;
   case TYPE_STRING:
     cg_print_string(node->value);
     break;
@@ -102,14 +105,19 @@ void cg_print_operand(const ast_node *node) {
   }
 }
 
+static void cg_expression(const ast_node *expr);
+
 /* ---------- Calls ---------- */
 // Pushes arguments in order and calls the function, result stays on stack
 void cg_fun_call(const ast_node *call) {
-  for (const ast_node *arg = call->left; arg != NULL; arg = arg->left) {
-    printf("PUSHS ");
-    cg_print_operand(arg);
-    printf("\n");
-    if (arg->widen_to_double) printf("INT2FLOATS\n");
+  const ast_node *list = call->left;
+  if (list && list->node_type != NODE_LIST) {
+    for (const ast_node *arg = list; arg; arg = arg->left)
+      cg_expression(arg->right ? arg->right : arg);
+  } else {
+    for (; list; list = list->right)
+      for (const ast_node *arg = list->left; arg; arg = arg->left)
+        cg_expression(arg->right);
   }
   printf("CALL $%s\n", call->value);
 }
@@ -130,6 +138,14 @@ static void cg_params_pop(ast_node *param) {
   cg_params_pop(param->left); // Go to the last parameter first
   printf("POPS LF@%s\n", param->value);
 }
+
+static void cg_param_lists_pop(ast_node *list) {
+  if (!list) return;
+  cg_param_lists_pop(list->right);
+  cg_params_pop(list->left);
+}
+
+static void cg_if(const ast_node *stmt, bool keep_value);
 
 /* ---------- Expressions ---------- */
 // Prints stack instructions for one binary operator
@@ -160,8 +176,6 @@ static void cg_operator(const char *op) {
   }
 }
 
-static void cg_expression(const ast_node *expr);
-
 static void cg_expression_value(const ast_node *expr) {
   if (expr == NULL) {
     printf("PUSHS nil@nil\n"); // Missing value is Unit
@@ -169,6 +183,22 @@ static void cg_expression_value(const ast_node *expr) {
   }
   if (expr->node_type == NODE_FUN_CALL) {
     cg_fun_call(expr); // Call leaves its result on the stack
+    return;
+  }
+  if (expr->bare_call) {
+    printf("CALL $%s\n", expr->value);
+    return;
+  }
+  if (expr->node_type == NODE_IF) {
+    cg_if(expr, true);
+    return;
+  }
+  if (expr->node_type == NODE_MEMBER) {
+    cg_expression(expr->left);
+    if (strcmp(expr->value, "toString") == 0) printf("CALL $toStr\n");
+    else if (strcmp(expr->value, "toInt") == 0) printf("CALL $toInt\n");
+    else if (strcmp(expr->value, "length") == 0) printf("CALL $strLength\n");
+    else printf("CALL $$floor\n");
     return;
   }
   if (expr->node_type != NODE_EXPRESSION && expr->node_type != NODE_CONDITION) {
@@ -182,6 +212,19 @@ static void cg_expression_value(const ast_node *expr) {
     return;
   }
   cg_expression(expr->left);
+  if (strcmp(expr->value, "!") == 0) {
+    printf("NOTS\n");
+    return;
+  }
+  if (strcmp(expr->value, "&&") == 0 || strcmp(expr->value, "||") == 0) {
+    int id = cg_new_label();
+    const char *result = expr->value[0] == '&' ? "false" : "true";
+    printf("PUSHS bool@%s\nJUMPIFEQS $$logic%d$short\n", result, id);
+    cg_expression(expr->right);
+    printf("JUMP $$logic%d$end\nLABEL $$logic%d$short\n", id, id);
+    printf("PUSHS bool@%s\nLABEL $$logic%d$end\n", result, id);
+    return;
+  }
   if (expr->right == NULL && strcmp(expr->value, "-") == 0) {
     printf("PUSHS int@-1\n");
     cg_operator("*");
@@ -204,22 +247,38 @@ static void cg_body(const ast_node *body);
 
 // Defines all local variables in advance, also inside if/while blocks,
 // so DEFVAR is never repeated in a loop
-static void cg_defvars(const ast_node *block) {
-  for (; block != NULL && block->node_type == NODE_BLOCK;
-       block = block->right) {
-    const ast_node *stmt = block->left;
-    if (stmt == NULL) {
-      continue;
-    }
-    if (stmt->node_type == NODE_VAR_DEF || stmt->node_type == NODE_VAL_DEF) {
-      printf("DEFVAR LF@%s$%d\n", stmt->value, ++cg_var_count);
-    } else if (stmt->node_type == NODE_WHILE) {
-      cg_defvars(stmt->right);
-    } else if (stmt->node_type == NODE_IF && stmt->right != NULL) {
-      cg_defvars(stmt->right->left);  // then block
-      cg_defvars(stmt->right->right); // else block
-    }
+static void cg_defvars(const ast_node *node) {
+  while (node && node->node_type == NODE_BLOCK) {
+    cg_defvars(node->left);
+    node = node->right;
   }
+  if (!node) return;
+  if (node->node_type == NODE_VAR_DEF || node->node_type == NODE_VAL_DEF) {
+    cg_defvars(node->right);
+    printf("DEFVAR LF@%s$%d\n", node->value, ++cg_var_count);
+    return;
+  }
+  if (node->node_type == NODE_ARGUMENT) {
+    cg_defvars(node->right);
+    cg_defvars(node->left);
+    return;
+  }
+  if (node->node_type == NODE_FOR) {
+    const ast_node *start = node->left;
+    const ast_node *end = start->right;
+    const ast_node *step = end->right;
+    cg_defvars(start->left);
+    cg_defvars(end->left);
+    cg_defvars(step->left);
+    int id = ++cg_var_count;
+    printf("DEFVAR LF@%s$%d\n", node->value, id);
+    printf("DEFVAR LF@$forEnd%d\nDEFVAR LF@$forStep%d\n", id, id);
+    cg_defvars(step->right);
+    cg_defvars(node->right);
+    return;
+  }
+  cg_defvars(node->left);
+  cg_defvars(node->right);
 }
 
 // Leaves the function, result must already be on the stack
@@ -280,6 +339,53 @@ static void cg_while(const ast_node *stmt) {
   printf("LABEL $$while%d$end\n", id);
 }
 
+static void cg_for(const ast_node *stmt) {
+  const ast_node *start = stmt->left;
+  const ast_node *end = start->right;
+  const ast_node *step = end->right;
+  int saved_top = cg_scope_top;
+  int label = cg_new_label();
+
+  cg_expression(start->left);
+  cg_expression(end->left);
+  if (step->left) cg_expression(step->left);
+  else printf("PUSHS int@1\n");
+
+  cg_declare(stmt->value);
+  int id = cg_var_count;
+  printf("POPS LF@$forStep%d\nPOPS LF@$forEnd%d\n", id, id);
+  cg_pop_var(stmt->value);
+  printf("JUMPIFEQ $$for%d$end LF@$forStep%d int@0\n", label, id);
+
+  printf("LABEL $$for%d$check\n", label);
+  printf("PUSHS LF@$forStep%d\nPUSHS int@0\nLTS\nPUSHS bool@true\n", id);
+  printf("JUMPIFEQS $$for%d$descending\n", label);
+  printf("PUSHS LF@%s$%d\nPUSHS LF@$forEnd%d\n", stmt->value, id, id);
+  printf("%s", stmt->inclusive_range ? "GTS\nNOTS\n" : "LTS\n");
+  printf("JUMP $$for%d$bound\n", label);
+
+  printf("LABEL $$for%d$descending\n", label);
+  printf("PUSHS LF@%s$%d\nPUSHS LF@$forEnd%d\n", stmt->value, id, id);
+  printf("%s", stmt->inclusive_range ? "LTS\nNOTS\n" : "GTS\n");
+  printf("LABEL $$for%d$bound\n", label);
+  printf("PUSHS bool@false\nJUMPIFEQS $$for%d$end\n", label);
+
+  for (const ast_node *guard = step->right; guard; guard = guard->right) {
+    cg_expression(guard->left);
+    printf("PUSHS bool@false\nJUMPIFEQS $$for%d$next\n", label);
+  }
+  cg_block(stmt->right);
+
+  printf("LABEL $$for%d$next\n", label);
+  if (stmt->inclusive_range)
+    printf("JUMPIFEQ $$for%d$end LF@%s$%d LF@$forEnd%d\n",
+           label, stmt->value, id, id);
+  printf("ADD LF@%s$%d LF@%s$%d LF@$forStep%d\n",
+         stmt->value, id, stmt->value, id, id);
+  printf("JUMP $$for%d$check\nLABEL $$for%d$end\n", label, label);
+  cg_scope_top = saved_top;
+}
+
 // Generates one statement of a block
 static void cg_statement(const ast_node *stmt) {
   switch (stmt->node_type) {
@@ -304,10 +410,14 @@ static void cg_statement(const ast_node *stmt) {
   case NODE_IF:
     cg_if(stmt, false);
     break;
+  case NODE_FOR:
+    cg_for(stmt);
+    break;
   case NODE_WHILE:
     cg_while(stmt);
     break;
   case NODE_TERM:
+  case NODE_MEMBER:
   case NODE_EXPRESSION:
     cg_expression(stmt);
     printf("POPS GF@$discard\n"); // Result is not used
@@ -336,7 +446,8 @@ static void cg_body(const ast_node *body) {
     }
     if (body->right == NULL && (stmt->node_type == NODE_FUN_CALL ||
                                 stmt->node_type == NODE_EXPRESSION ||
-                                stmt->node_type == NODE_TERM)) {
+                                stmt->node_type == NODE_TERM ||
+                                stmt->node_type == NODE_MEMBER)) {
       cg_expression(stmt); // Last call or expression gives the result
       return;
     }
@@ -351,10 +462,11 @@ static void cg_function(ast_node *def) {
   printf("\nLABEL $%s\n", def->value); // def->value is the function name
   printf("CREATEFRAME\n");
   printf("PUSHFRAME\n");
-  cg_params_defvar(def->left);
+  for (ast_node *list = def->left; list; list = list->right)
+    cg_params_defvar(list->left);
   cg_var_count = 0;
   cg_defvars(body);
-  cg_params_pop(def->left);
+  cg_param_lists_pop(def->left);
   cg_var_count = 0; // Same numbers again while generating
   cg_scope_top = 0;
   cg_body(body);
@@ -423,6 +535,7 @@ static void cg_builtin_tostr(void) {
   printf("JUMPIFEQ $toStr$int LF@type string@int\n");
   printf("JUMPIFEQ $toStr$float LF@type string@float\n");
   printf("JUMPIFEQ $toStr$unit LF@type string@nil\n");
+  printf("JUMPIFEQ $toStr$bool LF@type string@bool\n");
   printf("MOVE LF@result LF@value\n"); // Already a string
   printf("JUMP $toStr$end\n");
   printf("LABEL $toStr$int\n");
@@ -433,6 +546,11 @@ static void cg_builtin_tostr(void) {
   printf("JUMP $toStr$end\n");
   printf("LABEL $toStr$unit\n");
   printf("MOVE LF@result string@()\n");
+  printf("JUMP $toStr$end\n");
+  printf("LABEL $toStr$bool\n");
+  printf("MOVE LF@result string@false\n");
+  printf("JUMPIFEQ $toStr$end LF@value bool@false\n");
+  printf("MOVE LF@result string@true\n");
   printf("LABEL $toStr$end\n");
   printf("PUSHS LF@result\n");
   printf("POPFRAME\n");
@@ -587,10 +705,27 @@ static void cg_helper_div(void) {
   printf("RETURN\n");
 }
 
+// Truncation differs from floor for negative nonintegral values.
+static void cg_helper_floor(void) {
+  printf("\nLABEL $$floor\nCREATEFRAME\nPUSHFRAME\n");
+  printf("DEFVAR LF@value\nDEFVAR LF@rounded\nDEFVAR LF@check\n");
+  printf("POPS LF@value\nMOVE LF@rounded LF@value\n");
+  printf("LT LF@check LF@value float@0x1p+52\n");
+  printf("JUMPIFEQ $$floor$end LF@check bool@false\n");
+  printf("GT LF@check LF@value float@-0x1p+52\n");
+  printf("JUMPIFEQ $$floor$end LF@check bool@false\n");
+  printf("FLOAT2INT LF@rounded LF@value\nINT2FLOAT LF@rounded LF@rounded\n");
+  printf("GT LF@check LF@rounded LF@value\n");
+  printf("JUMPIFEQ $$floor$end LF@check bool@false\n");
+  printf("SUB LF@rounded LF@rounded float@0x1p+0\n");
+  printf("LABEL $$floor$end\nPUSHS LF@rounded\nPOPFRAME\nRETURN\n");
+}
+
 // Prints code of all built-in functions
 static void cg_builtins(void) {
   cg_builtin_print();
   cg_builtin_read("readLine", "string", "string@");
+  cg_builtin_read("readBoolean", "bool", "bool@false");
   cg_builtin_read("readInt", "int", "int@0");
   cg_builtin_read("readDouble", "float", "float@0x0p+0");
   cg_builtin_simple("toInt", "FLOAT2INT");
@@ -602,6 +737,7 @@ static void cg_builtins(void) {
   cg_helper_align();
   cg_helper_add();
   cg_helper_div();
+  cg_helper_floor();
 }
 
 /* ---------- Program ---------- */
