@@ -10,7 +10,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include "../ast/ast.h"
+#include "ast.h"
 
 struct ASTNode;
 
