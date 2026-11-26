@@ -1,3 +1,10 @@
+/**
+ * Project IFJ26 compiler
+ * File: parser.h
+ * Description: Interface of the syntax analyser
+ * Author: <xsmidja00> Jakub Šmíd
+ */
+
 #ifndef PARSER_H
 #define PARSER_H
 
