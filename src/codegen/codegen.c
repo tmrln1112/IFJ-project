@@ -355,7 +355,9 @@ static void cg_for(const ast_node *stmt) {
   int id = cg_var_count;
   printf("POPS LF@$forStep%d\nPOPS LF@$forEnd%d\n", id, id);
   cg_pop_var(stmt->value);
-  printf("JUMPIFEQ $$for%d$end LF@$forStep%d int@0\n", label, id);
+  // Step computed at runtime must not be zero, error 40
+  printf("JUMPIFNEQ $$for%d$check LF@$forStep%d int@0\n", label, id);
+  printf("EXIT int@40\n");
 
   printf("LABEL $$for%d$check\n", label);
   printf("PUSHS LF@$forStep%d\nPUSHS int@0\nLTS\nPUSHS bool@true\n", id);
