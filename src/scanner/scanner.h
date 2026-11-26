@@ -23,6 +23,9 @@ typedef enum {
   T_UNDERSCORE, // lone underscore _
   T_LPAR,       // left parenthesis (
   T_RPAR,       // right parenthesis )
+  T_LBRACKET,   // left bracket [
+  T_RBRACKET,   // right bracket ]
+  T_PIPE,       // single pipe |
 
   T_ID,         // identifier
   T_LIT_INT,    // literal integer

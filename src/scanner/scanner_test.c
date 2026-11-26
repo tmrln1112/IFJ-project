@@ -109,6 +109,12 @@ const char *token_type_to_string(Token_type type) {
     return "T_LPAR";
   case T_RPAR:
     return "T_RPAR";
+  case T_LBRACKET:
+    return "T_LBRACKET";
+  case T_RBRACKET:
+    return "T_RBRACKET";
+  case T_PIPE:
+    return "T_PIPE";
   case T_COLON:
     return "T_COLON";
   case T_SEMICOLON:

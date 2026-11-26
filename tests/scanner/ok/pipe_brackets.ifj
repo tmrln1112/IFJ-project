@@ -1,0 +1,2 @@
+def f(x: Int | String, xs: List[Int]): Unit =
+  xs[0]
