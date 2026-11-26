@@ -1,0 +1,5 @@
+Line 1 | Token: T_ID            | Attr: a
+Line 1 | Token: T_PIPE          | Attr: NULL
+Line 1 | Token: T_ID            | Attr: b
+Line 1 | Token: T_EOL           | Attr: NULL
+Line 2 | Token: T_EOF           | Attr: NULL

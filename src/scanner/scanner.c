@@ -253,7 +253,7 @@ typedef enum {
   STATE_ASSIGN,  // =: read '='
   STATE_EXCLAM,  // !: read '!'
   STATE_AMP,     // Q14: read '&'
-  STATE_PIPE,    // Q15: read '|'
+  STATE_PIPE,    // Q15: read '|', final as single pipe
   STATE_LESS,    // <: read '<'
   STATE_GREATER, // >: read '>'
   /* ---------- String states ---------- */
@@ -462,6 +462,10 @@ int get_token(Token *token) {
           paren_depth--;
         }
         return emit(token, &buffer, T_RPAR);
+      case '[':
+        return emit(token, &buffer, T_LBRACKET);
+      case ']':
+        return emit(token, &buffer, T_RBRACKET);
       case ',':
         return emit(token, &buffer, T_COMMA);
       case ':':
@@ -747,11 +751,12 @@ int get_token(Token *token) {
       }
       return lex_error(&buffer); // a single '&' is not an operator
 
-    case STATE_PIPE:
+    case STATE_PIPE: // Q15
       if (c == '|') {
         return emit(token, &buffer, T_OR);
       }
-      return lex_error(&buffer); // a single '|' is not an operator
+      ungetc(c, source_file);
+      return emit(token, &buffer, T_PIPE); // single '|', e.g. Int | String
 
     case STATE_LESS:
       if (c == '-') {
