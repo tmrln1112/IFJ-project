@@ -1,3 +1,10 @@
+/**
+ * Project IFJ26 compiler
+ * File: pstack.c
+ * Description: Stack for the precedence analysis of expressions
+ * Author: <xsmidja00> Jakub Šmíd
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 

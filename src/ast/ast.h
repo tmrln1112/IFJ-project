@@ -1,3 +1,10 @@
+/**
+ * Project IFJ26 compiler
+ * File: ast.h
+ * Description: Abstract syntax tree built by the parser
+ * Author: <xsmidja00> Jakub Šmíd
+ */
+
 #ifndef AST_H
 #define AST_H
 
