@@ -1,0 +1,7 @@
+import ifj26.*
+
+@main def run(): Unit =
+  for
+    i <- 0 until 10
+    do
+    print(i)

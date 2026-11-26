@@ -1,3 +1,10 @@
+/**
+ * Project IFJ26 compiler
+ * File: parser.c
+ * Description: Syntax analysis: recursive descent and precedence analysis of expressions
+ * Author: <xsmidja00> Jakub Šmíd
+ */
+
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -942,6 +949,13 @@ static int parse_for(ast_node **node)
 {
     int err = advance_token();
     if (err != 0) return err;
+
+    // Multi-line header: generator and guards are on indented lines
+    // and 'do' is aligned with 'for' (CONTROL extension)
+    bool multiline = valid_token && current_token.type == T_EOL;
+    if (multiline && (!match_tokens(T_EOL) || !match_tokens(T_INDENT)))
+        return parser_or_scanner_err();
+
     if (!valid_token || current_token.type != T_ID) return parser_or_scanner_err();
     char *name = strdup(current_token.attribute);
     if (!name) return 99;
@@ -975,12 +989,21 @@ static int parse_for(ast_node **node)
     }
 
     ast_node **guard = &step->right;
-    while (valid_token && current_token.type == T_IF) {
+    while (true) {
+        // In a multi-line header each guard may start on its own line
+        if (multiline && valid_token && current_token.type == T_EOL &&
+            valid_look_ahead && look_ahead_token.type == T_IF) {
+            err = advance_token();
+            if (err != 0) return err;
+        }
+        if (!valid_token || current_token.type != T_IF) break;
         err = advance_token();
         if (err == 0) err = parse_range_item(guard);
         if (err != 0) return err;
         guard = &(*guard)->right;
     }
+    if (multiline && (!match_tokens(T_EOL) || !match_tokens(T_DEDENT)))
+        return parser_or_scanner_err();
     if (!match_tokens(T_DO)) return parser_or_scanner_err();
     return parse_branch(&(*node)->right);
 }
