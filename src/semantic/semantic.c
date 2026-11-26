@@ -568,21 +568,25 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             }
 
             // Resolve built-in VALMEM properties.
-            bool is_tostring = (strcmp(mname, "toString") == 0 && rec_type != (DataType)TYPE_UNIT && rec_type != TYPE_UNKNOWN);
-            bool is_dbl_toint = (rec_type == (DataType)TYPE_DOUBLE && strcmp(mname, "toInt") == 0);
-            bool is_dbl_floor = (rec_type == (DataType)TYPE_DOUBLE && strcmp(mname, "floor") == 0);
+            bool is_num = (rec_type == (DataType)TYPE_DOUBLE || rec_type == (DataType)TYPE_INT);
+            bool is_tostring = (strcmp(mname, "toString") == 0 && rec_type != TYPE_UNKNOWN);
+            bool is_num_toint = (is_num && strcmp(mname, "toInt") == 0);
+            bool is_num_floor = (is_num && strcmp(mname, "floor") == 0);
             bool is_str_len = (rec_type == (DataType)TYPE_STRING && strcmp(mname, "length") == 0);
 
-            if (is_tostring || is_dbl_toint || is_dbl_floor || is_str_len) {
+            if (is_tostring || is_num_toint || is_num_floor || is_str_len) {
                 if (node->has_parens) {
                     // VALMEM properties must be accessed strictly without parentheses -> Error 5
                     *err = SEM_ERR_CALL;
                     return TYPE_UNKNOWN;
                 }
+                if ((is_num_toint || is_num_floor) && rec_type == (DataType)TYPE_INT) {
+                    mark_widening(node->receiver);
+                }
                 DataType res_type = (DataType)TYPE_STRING;
-                if (is_dbl_toint || is_str_len) {
+                if (is_num_toint || is_str_len) {
                     res_type = (DataType)TYPE_INT;
-                } else if (is_dbl_floor) {
+                } else if (is_num_floor) {
                     res_type = (DataType)TYPE_DOUBLE;
                 }
                 node->sem_type = res_type;
