@@ -1,8 +1,7 @@
 /**
  * Project IFJ26 compiler
  * File: semantic.h
- * Description: Semantic analyzer interface and AST structures supporting BOOLTHEN, FUNEXP,
- *              CONTROL, VALMEM and PARAMLISTS
+ * Description: semantic analysis interface and internal ast
  * Author: <xstrelm00> Maksym Streltsov
  */
 
@@ -14,222 +13,147 @@
 #include "symtable.h"
 #include "ast.h"
 
-/**
- * Semantic error codes according to IFJ26 specification:
- *  0 - No error
- *  3 - Undefined function/variable or missing @main
- *  4 - Redefinition of variable/function, duplicate parameter name, overriding built-in VALMEM, multiple @main
- *  5 - Wrong number/types of arguments or wrong parentheses usage in function call or @main header
- *  6 - Type incompatibility in expressions/statements/return, missing return type in recursive function or function with return
- *  7 - Assignment to immutable variable (val, parameter, for-loop variable)
- * 10 - Other semantic error (e.g., for-loop step literal is 0)
- * 99 - Internal compiler error (memory allocation failure)
- */
+// return codes from spec
 #define SEM_OK              0
-#define SEM_ERR_UNDEF       3
-#define SEM_ERR_REDEF       4
-#define SEM_ERR_CALL        5
-#define SEM_ERR_TYPE        6
-#define SEM_ERR_IMMUTABLE   7
-#define SEM_ERR_OTHER       10
+#define SEM_ERR_UNDEF       3   // undefined var/func or missing @main
+#define SEM_ERR_REDEF       4   // redefinition, duplicate param, >1 @main
+#define SEM_ERR_CALL        5   // bad arg count/types, bad parens
+#define SEM_ERR_TYPE        6   // type mismatch, missing return type when needed
+#define SEM_ERR_IMMUTABLE   7   // reassigning val / param / loop var
+#define SEM_ERR_OTHER       10  // e.g. for loop with literal 0 step
 #define SEM_ERR_INTERNAL    99
 
-/**
- * Operator types for unary and binary expressions (including BOOLTHEN).
- */
 typedef enum {
     OP_NONE = 0,
-    // Unary operators
     OP_NEG,         // -x
-    OP_NOT,         // !x (BOOLTHEN)
-    // Arithmetic & String binary operators
-    OP_ADD,         // + (Int/Double addition or String concatenation)
-    OP_SUB,         // -
-    OP_MUL,         // *
-    OP_DIV,         // /
-    // Relational operators
-    OP_LT,          // <
-    OP_LE,          // <=
-    OP_GT,          // >
-    OP_GE,          // >=
-    // Equality operators
-    OP_EQ,          // ==
-    OP_NEQ,         // !=
-    // Logical operators (BOOLTHEN)
-    OP_AND,         // &&
-    OP_OR           // ||
+    OP_NOT,         // !x
+    OP_ADD,         // + (numbers or string concat)
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
+    OP_LT,
+    OP_LE,
+    OP_GT,
+    OP_GE,
+    OP_EQ,
+    OP_NEQ,
+    OP_AND,
+    OP_OR
 } OperatorType;
 
-/**
- * High-level semantic AST node kinds covering core IFJ26 and supported extensions.
- */
 typedef enum {
     AST_PROGRAM = 0,
-    AST_FUNC_DEF,       // function definition
-    AST_BLOCK,          // Sequence of statements/expressions
-    AST_VAR_DECL,       // val / var declaration
-    AST_ASSIGN,         // id = expr
-    AST_IDENTIFIER,     // Variable reference OR parameterless function call (PARAMLISTS)
-    AST_FUNC_CALL,      // Function call with 1+ argument lists: id(args1)(args2)...
-    AST_MEMBER_ACCESS,  // expr.member (VALMEM)
-    AST_IF,             // if cond then ... [else ...] (BOOLTHEN + CONTROL)
-    AST_WHILE,          // while cond do ...
-    AST_FOR,            // for i <- from to/until end [by step] [if guard]... do body (CONTROL)
-    AST_RETURN,         // return [expr]
-    AST_BINOP,          // left op right
-    AST_UNOP,           // op operand
-    AST_LITERAL         // Int, Double, String, Boolean, Unit literal
+    AST_FUNC_DEF,
+    AST_BLOCK,
+    AST_VAR_DECL,
+    AST_ASSIGN,
+    AST_IDENTIFIER,     // var ref or bare call without parens
+    AST_FUNC_CALL,
+    AST_MEMBER_ACCESS,
+    AST_IF,
+    AST_WHILE,
+    AST_FOR,
+    AST_RETURN,
+    AST_BINOP,
+    AST_UNOP,
+    AST_LITERAL
 } ASTNodeKind;
 
-/**
- * Argument list for a single pair of parentheses in a call (FUNEXP + PARAMLISTS).
- */
 typedef struct {
     size_t count;
     struct ASTNode **args;
 } ArgList;
 
-/**
- * Rich semantic ASTNode supporting all fields described in the semantic specification.
- */
+// internal ast used by semantic pass, keeps a pointer back to parser node
+// so we can set flags for codegen (widening, discard, bare_call, etc)
 typedef struct ASTNode {
-    ast_node *parser_node;          // Borrowed parser node for code generation annotations
+    ast_node *parser_node;
     ASTNodeKind kind;
 
-    // Statements / Program items list
     struct ASTNode **items;
     size_t item_count;
 
-    // Function definition (AST_FUNC_DEF)
-    char *name;                     // Function, variable, or identifier name
-    bool is_main;                   // @main annotation
-    bool has_parens;                // true if declared/called with parentheses
-    size_t num_param_lists;         // Number of parameter lists (PARAMLISTS)
-    ParamList *param_lists;         // Array of parameter lists
-    bool has_explicit_return;       // true if ': ReturnType' is present
-    DataType declared_type;         // Explicit return type or variable type annotation
-    struct ASTNode *body;           // Function body or loop body
+    // func def
+    char *name;
+    bool is_main;
+    bool has_parens;
+    size_t num_param_lists;
+    ParamList *param_lists;
+    bool has_explicit_return;
+    DataType declared_type;
+    struct ASTNode *body;
 
-    // Variable declaration (AST_VAR_DECL) & Assignment (AST_ASSIGN)
-    bool is_mutable;                // true for 'var', false for 'val'
-    bool has_explicit_type;         // true if ': T' was specified on val/var
-    struct ASTNode *init_expr;      // Initializer expression for val/var
-    struct ASTNode *rhs;            // Right-hand side expression for assignment
+    // var/val & assign
+    bool is_mutable;
+    bool has_explicit_type;
+    struct ASTNode *init_expr;
+    struct ASTNode *rhs;
 
-    // Function call (AST_FUNC_CALL) & Member access/call (AST_MEMBER_ACCESS)
-    size_t num_arg_lists;           // Number of parenthesized argument lists
-    ArgList *arg_lists;             // Array of argument lists
-    struct ASTNode *receiver;       // Left of '.' in expr.member
-    char *member_name;              // Right of '.' in expr.member
+    // calls & member access
+    size_t num_arg_lists;
+    ArgList *arg_lists;
+    struct ASTNode *receiver;
+    char *member_name;
 
-    // Conditional (AST_IF) & Loops (AST_WHILE, AST_FOR)
-    struct ASTNode *cond;           // Condition in if / while
-    struct ASTNode *then_branch;    // Then block/expr
-    struct ASTNode *else_branch;    // Else block/expr (NULL if omitted)
-    bool is_expression;             // true if 'if' is evaluated as an expression
+    // if / while
+    struct ASTNode *cond;
+    struct ASTNode *then_branch;
+    struct ASTNode *else_branch;
+    bool is_expression;
 
-    // For loop (AST_FOR - CONTROL)
-    char *iter_name;                // Loop variable 'i'
-    struct ASTNode *from_expr;      // Start bound
-    struct ASTNode *end_expr;       // End bound
-    bool is_until;                  // true for 'until', false for 'to'
-    struct ASTNode *step_expr;      // Optional 'by step' (NULL if omitted)
-    struct ASTNode **guards;        // Optional 'if guard' expressions
+    // for loop
+    char *iter_name;
+    struct ASTNode *from_expr;
+    struct ASTNode *end_expr;
+    bool is_until;
+    struct ASTNode *step_expr;
+    struct ASTNode **guards;
     size_t guard_count;
 
-    // Return statement (AST_RETURN)
-    struct ASTNode *return_expr;    // Optional return expression (NULL if bare 'return')
+    struct ASTNode *return_expr;
 
-    // Operators (AST_BINOP, AST_UNOP)
+    // unary / binary ops
     OperatorType op;
     struct ASTNode *left;
     struct ASTNode *right;
     struct ASTNode *operand;
 
-    // Literal value (AST_LITERAL)
+    // literals
     DataType literal_type;
     long long int_val;
     double double_val;
     char *str_val;
     bool bool_val;
-    bool is_int_literal;            // Used to detect literal 0 in 'for ... by 0'
+    bool is_int_literal;            // needed to spot literal 0 in 'by 0'
 
-    // Annotations populated by Semantic Analysis for Code Generation
-    DataType sem_type;              // Inferred/verified semantic type of this node
-    int unique_var_id;              // Resolved unique variable ID (for shadowing)
-    bool is_func_call;              // Marks an identifier node that resolves to a parameterless function call
-    bool conv_to_double;            // Marks implicit Int -> Double conversion on this node
+    // filled during analysis
+    DataType sem_type;
+    int unique_var_id;
+    bool is_func_call;
+    bool conv_to_double;
 } ASTNode;
 
-/**
- * Context state for the two-pass semantic analyzer.
- */
 typedef struct {
-    SymTable *global_funcs;         // Global symbol table for functions
-    ScopeStack local_scopes;        // Stack of local variable scopes for the active function
-    Symbol *current_func;           // Function currently being analyzed (for 'return' validation)
-    int next_var_id;                // Global counter (1, 2, 3...) for unique variable IDs
+    SymTable *global_funcs;
+    ScopeStack local_scopes;
+    Symbol *current_func;
+    int next_var_id;
 } SemanticContext;
 
-/* --- Core Semantic Analysis API --- */
-
-/**
- * Initializes the semantic context and creates global_funcs and local_scopes.
- */
 bool semantic_context_init(SemanticContext *ctx);
-
-/**
- * Frees all tables and scopes inside the semantic context.
- */
 void semantic_context_free(SemanticContext *ctx);
-
-/**
- * Registers all 11 built-in IFJ26 functions into ctx->global_funcs.
- */
 int semantic_register_builtins(SemanticContext *ctx);
 
-/**
- * Runs complete 2-pass semantic analysis on an ASTNode tree.
- * Returns 0 (SEM_OK) on success, or an IFJ26 semantic error code (3, 4, 5, 6, 7, 10, 99).
- */
 int semantic_analyze(ASTNode *root);
-
-/**
- * Bridge entry point: converts the current parser's ast_node tree into ASTNode
- * and runs semantic_analyze on it.
- */
 int semantic_analyze_parser_ast(ast_node *parser_root);
 
-/**
- * Analyzes a single function symbol (Pass 2), performing return type inference
- * and recursion checking.
- */
 int analyze_function(SemanticContext *ctx, Symbol *fn);
-
-/**
- * Checks type compatibility (including TYPE_ANY and implicit Int -> Double promotion).
- * If expected == TYPE_DOUBLE and actual == TYPE_INT, sets actual_node->conv_to_double = true.
- */
 bool check_type_compat(DataType expected, DataType actual, ASTNode *actual_node);
 
-/**
- * Analyzes a block node and returns the resulting DataType of the block.
- */
 DataType analyze_block(SemanticContext *ctx, ASTNode *block_node, int *err);
-
-/**
- * Analyzes an expression node and returns its DataType.
- */
 DataType analyze_expr(SemanticContext *ctx, ASTNode *node, int *err);
-
-/**
- * Analyzes a statement or general AST node and returns its DataType.
- */
 DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err);
 
-/**
- * Helper to free a semantic ASTNode tree.
- */
 void semantic_ast_free(ASTNode *node);
 
-#endif // SEMANTIC_H
+#endif
