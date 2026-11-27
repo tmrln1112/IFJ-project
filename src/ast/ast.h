@@ -11,96 +11,96 @@
 #include <stdbool.h>
 
 typedef enum {
-    TYPE_NONE,
-    TYPE_ID,
-    // Used for Keyword and Literal value
-    TYPE_INT,
-    TYPE_DOUBLE,
-    TYPE_STRING,
-    TYPE_BOOL,
-    TYPE_UNIT
+  TYPE_NONE,
+  TYPE_ID,
+  // Used for Keyword and Literal value
+  TYPE_INT,
+  TYPE_DOUBLE,
+  TYPE_STRING,
+  TYPE_BOOL,
+  TYPE_UNIT
 } data_type_t;
 
 typedef enum {
-    NODE_FUNCTION,        // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_FUN_DEF
-                          // R: NODE_FUNCTION | NODE_MAIN_FUNCTION | NULL
+  NODE_FUNCTION, // value: NULL; data_type: TYPE_NONE
+                 // L: NODE_FUN_DEF
+                 // R: NODE_FUNCTION | NODE_MAIN_FUNCTION | NULL
 
-    NODE_MAIN_FUNCTION,   // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_FUN_DEF
-                          // R: NODE_FUNCTION | NODE_MAIN_FUNCTION | NULL
+  NODE_MAIN_FUNCTION, // value: NULL; data_type: TYPE_NONE
+                      // L: NODE_FUN_DEF
+                      // R: NODE_FUNCTION | NODE_MAIN_FUNCTION | NULL
 
-    NODE_FUN_DEF,         // first: value: id of function; data_type: TYPE_ID
-                          //        L: NODE_LIST | NULL
-                          //        R: second NODE_FUN_DEF
+  NODE_FUN_DEF, // first: value: id of function; data_type: TYPE_ID
+                //        L: NODE_LIST | NULL
+                //        R: second NODE_FUN_DEF
 
-                          // second: value: NULL; data_type: TYPE_NONE
-                          //        L: NODE_TYPE | NULL
-                          //        R: NODE_BLOCK | NODE_FUN_CALL | NODE_EXPRESSION
+  // second: value: NULL; data_type: TYPE_NONE
+  //        L: NODE_TYPE | NULL
+  //        R: NODE_BLOCK | NODE_FUN_CALL | NODE_EXPRESSION
 
-    NODE_PARAMETER,       // value: id of parameter; data_type: explicit value type or TYPE_NONE
-                          // L: NODE_PARAMETER | NULL; R: NULL
+  NODE_PARAMETER, // value: id of parameter; data_type: explicit value type or
+                  // TYPE_NONE L: NODE_PARAMETER | NULL; R: NULL
 
-    NODE_TYPE,            // value: NULL; data_type: either funtion return type or variable/value type
-                          // L: NULL; R: NULL
+  NODE_TYPE, // value: NULL; data_type: either funtion return type or
+             // variable/value type L: NULL; R: NULL
 
-    NODE_BLOCK,           // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_VAR_DEF | NODE_VAL_DEF | NODE_RETURN | NODE_IF
-                          //    | NODE_WHILE | NODE_ASSIGNMENT | NODE_FUN_CALL
-                          //    | NODE_EXPRESSION | NULL
-                          // R: NODE_BLOCK | NULL
+  NODE_BLOCK, // value: NULL; data_type: TYPE_NONE
+              // L: NODE_VAR_DEF | NODE_VAL_DEF | NODE_RETURN | NODE_IF
+              //    | NODE_WHILE | NODE_ASSIGNMENT | NODE_FUN_CALL
+              //    | NODE_EXPRESSION | NULL
+              // R: NODE_BLOCK | NULL
 
-    NODE_VAR_DEF,         // value: id of variable; data_type: TYPE_ID
-                          // L: NODE_TYPE | NULL
-                          // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
+  NODE_VAR_DEF, // value: id of variable; data_type: TYPE_ID
+                // L: NODE_TYPE | NULL
+                // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
 
-    NODE_VAL_DEF,         // value: id of value; data_type: TYPE_ID
-                          // L: NODE_TYPE | NULL
-                          // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
+  NODE_VAL_DEF, // value: id of value; data_type: TYPE_ID
+                // L: NODE_TYPE | NULL
+                // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
 
-    NODE_ASSIGNMENT,      // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_TERM (always ID) <--- assigning to this value
-                          // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
+  NODE_ASSIGNMENT, // value: NULL; data_type: TYPE_NONE
+                   // L: NODE_TERM (always ID) <--- assigning to this value
+                   // R: NODE_FUN_CALL | NODE_EXPRESSION | NULL
 
-    NODE_RETURN,          // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_FUN_CALL | NODE_EXPRESSION | NULL; R: NULL
+  NODE_RETURN, // value: NULL; data_type: TYPE_NONE
+               // L: NODE_FUN_CALL | NODE_EXPRESSION | NULL; R: NULL
 
-    NODE_IF,              // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_CONDITION; R: NODE_IF_BODY | NULL
+  NODE_IF, // value: NULL; data_type: TYPE_NONE
+           // L: NODE_CONDITION; R: NODE_IF_BODY | NULL
 
-    NODE_IF_BODY,         // value: NULL; data_type: TYPE_NONE
-                          // L: then block; R: else block or NULL
+  NODE_IF_BODY, // value: NULL; data_type: TYPE_NONE
+                // L: then block; R: else block or NULL
 
-    NODE_WHILE,           // value: NULL; data_type: TYPE_NONE
-                          // L: NODE_CONDITION; R: NODE_BLOCK
+  NODE_WHILE, // value: NULL; data_type: TYPE_NONE
+              // L: NODE_CONDITION; R: NODE_BLOCK
 
-    NODE_FUN_CALL,        // value: id of function; data_type: TYPE_ID
-                          // L: NODE_LIST; R: NULL
+  NODE_FUN_CALL, // value: id of function; data_type: TYPE_ID
+                 // L: NODE_LIST; R: NULL
 
-    NODE_ARGUMENT,        // L: next argument; R: argument expression
-                          // A leaf argument can also carry its own value and type
+  NODE_ARGUMENT, // L: next argument; R: argument expression
+                 // A leaf argument can also carry its own value and type
 
-    NODE_TERM,            // value: id or literal | NULL; data_type: type of value
-                          // L: NULL; R: NULL
+  NODE_TERM, // value: id or literal | NULL; data_type: type of value
+             // L: NULL; R: NULL
 
-    NODE_EXPRESSION,      // value: operator; L: operand; R: second operand or NULL
-    NODE_MEMBER,          // L: receiver; R: optional argument lists
-    NODE_LIST,            // L: items; R: next parenthesized list
-    NODE_FOR,             // L: range; R: loop body; value: iterator name
-    NODE_CONDITION,       //
+  NODE_EXPRESSION, // value: operator; L: operand; R: second operand or NULL
+  NODE_MEMBER,     // L: receiver; R: optional argument lists
+  NODE_LIST,       // L: items; R: next parenthesized list
+  NODE_FOR,        // L: range; R: loop body; value: iterator name
+  NODE_CONDITION,  //
 } node_type_t;
 
 typedef struct ast_node {
-    node_type_t node_type;
-    data_type_t data_type;
-    char *value;
-    struct ast_node *left;
-    struct ast_node *right;
-    bool bare_call;
-    bool inclusive_range;
-    bool widen_to_double;
-    bool discard_value;
-    bool if_has_value;
+  node_type_t node_type;
+  data_type_t data_type;
+  char *value;
+  struct ast_node *left;
+  struct ast_node *right;
+  bool bare_call;
+  bool inclusive_range;
+  bool widen_to_double;
+  bool discard_value;
+  bool if_has_value;
 } ast_node;
 
 ast_node *ast_create_node(node_type_t type, data_type_t data, char *value);

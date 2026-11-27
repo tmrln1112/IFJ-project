@@ -3,15 +3,14 @@
  * File: main.c
  * Description: Compiler entry point
  * Author: <xstrelm00> Maksym Streltsov
- *         <xalimzt00> Tamerlan Alimzhanov 
+ *         <xalimzt00> Tamerlan Alimzhanov
  */
-#include "parser.h"
 #include "ast.h"
-#include "scanner.h"
 #include "codegen.h"
+#include "parser.h"
+#include "scanner.h"
 #include "semantic.h"
 #include <stdio.h>
-
 
 int main(void) {
   scanner_init(stdin);
