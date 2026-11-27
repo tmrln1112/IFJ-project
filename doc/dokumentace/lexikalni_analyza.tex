@@ -1,0 +1,102 @@
+\subsection{Lexikální analýza}
+
+Lexikální analyzátor (\texttt{scanner.c}) je deterministický konečný automat.
+Aktuální stav drží proměnná typu \texttt{State}; každému nekoncovému uzlu
+diagramu v~příloze~\ref{app:fsm} odpovídá jedna hodnota tohoto výčtu
+a v~komentáři u~ní je uveden název uzlu z~diagramu. Parser volá funkci
+\texttt{get\_token()}, která čte vstup po znacích, prochází automatem a při
+každém volání vrátí jeden token. Text lexému se během čtení ukládá do
+dynamického řetězce (\texttt{dynstr}), takže délka identifikátorů ani
+řetězců není omezena.
+
+\paragraph{Rozhraní s~parserem.}
+Token (\texttt{Token}) obsahuje typ, atribut (řetězec nebo \texttt{NULL}),
+číslo řádku a příznak \texttt{newline\_before} (viz níže). Atribut mají jen
+identifikátory a literály:
+\begin{itemize}
+
+  \item číselný literál zůstává jako text, jen bez podtržítek a bez přípony
+        \texttt{d}/\texttt{D}; na číslo ho převádějí až další části překladače,
+  \item u~řetězcového literálu jsou escape sekvence už nahrazeny skutečnými
+        znaky,
+  \item klíčové slovo se pozná až po načtení celého identifikátoru, a to
+        vyhledáním v~tabulce klíčových slov; rezervována jsou i klíčová slova
+        rozšíření.
+\end{itemize}
+Například řádek \texttt{val x = 3.5} skener rozloží na tokeny
+\texttt{T\_VAL}, \texttt{T\_ID}\,(\texttt{x}), \texttt{T\_ASSIGN},
+\texttt{T\_LIT\_DOUBLE}\,(\texttt{3.5}) a \texttt{T\_EOL};
+v~závorce je uveden atribut.
+
+Samotné podtržítko, samotné \texttt{|} a hranaté závorky \texttt{[},
+\texttt{]} jsou ve specifikaci určeny pro rozšíření. Skener je vrací jako
+tokeny (\texttt{T\_UNDERSCORE}, \texttt{T\_PIPE}, \texttt{T\_LBRACKET},
+\texttt{T\_RBRACKET}) a jejich nepovolené použití odhalí parser jako
+syntaktickou chybu. Paměť atributu uvolňuje ten, kdo token převzal, funkcí
+\texttt{free\_token()}. Po posledním tokenu (i po chybě) se volá
+\texttt{scanner\_free()}, která uvolní zásobník odsazení.
+
+\paragraph{Odsazení a konce řádků.}
+Na konci každého neprázdného řádku vrátí skener token \texttt{T\_EOL}.
+Na začátku dalšího řádku spočítá mezery a porovná je s~úrovní aktuálního
+bloku (vrchol zásobníku odsazení):
+\begin{itemize}
+  \item stejné odsazení -- pokračuje se ve stejném bloku,
+  \item větší odsazení -- začíná nový blok, skener vrátí \texttt{T\_INDENT}
+        a novou úroveň uloží na zásobník,
+  \item menší odsazení -- končí jeden nebo více bloků, skener vrací
+        \texttt{T\_DEDENT} (při každém volání jeden), dokud se nedostane na
+        stejnou úroveň. Pokud taková úroveň na zásobníku není (odsazení
+        padne mezi dvě uložené úrovně), jde o~lexikální chybu.
+\end{itemize}
+Tabulátor v~odsazení je lexikální chyba. Prázdné řádky a řádky jen
+s~komentářem odsazení neovlivňují. Na konci souboru skener vrátí
+\texttt{T\_EOL} (i když poslední řádek nekončí znakem konce řádku),
+potom \texttt{T\_DEDENT} pro každý ještě otevřený blok a nakonec
+\texttt{T\_EOF}.
+
+Uvnitř kulatých závorek se konec řádku bere jako mezera, takže výraz nebo
+seznam argumentů může pokračovat na dalším řádku. Takový řádek musí být
+odsazen víc než začátek příkazu; jen uzavírací \texttt{)} smí být na stejné
+úrovni. Pokud byl uvnitř závorek před tokenem přeskočen konec řádku, má
+token nastaven příznak \texttt{newline\_before}. Podle něj parser pozná,
+zda je povolena čárka před \texttt{)}.
+
+\paragraph{Odchylky od konečného automatu.}
+Kromě aktuálního stavu si skener pamatuje ještě několik údajů, které čistý
+konečný automat nemá:
+\begin{itemize}
+  \item \textbf{zásobník odsazení} -- pamatuje si úrovně odsazení
+        otevřených bloků, aby skener poznal, kdy vrátit \texttt{T\_INDENT}
+        a kolik \texttt{T\_DEDENT}; podle potřeby se zvětšuje,
+  \item \textbf{hloubku vnoření komentářů} $h$ -- blokové komentáře lze
+        vnořovat, a komentář tak končí až u~posledního \texttt{*/}.
+        Zároveň si pamatuje, zda komentář obsahoval konec řádku; takový
+        komentář se pak chová jako konec řádku,
+  \item \textbf{počet otevřených kulatých závorek} a to, zda byl uvnitř
+        nich přeskočen konec řádku (viz výše),
+  \item \textbf{jeden znak navíc k~vrácení} -- u~zápisu \texttt{3.toString}
+        se skener dozví, že nejde o~desetinné číslo, až po přečtení
+        \texttt{3}, tečky a dalšího znaku. Vrátí tedy \texttt{3} jako
+        \texttt{Int} a tečku i další znak vrátí na vstup; protože
+        \texttt{ungetc} zaručuje vrácení jen jednoho znaku, druhý si skener
+        drží ve vlastní proměnné,
+  \item \textbf{klíčová slova} se v~automatu nerozlišují od identifikátorů;
+        po načtení celého slova se vyhledá v~tabulce klíčových slov,
+  \item \textbf{slovo za \texttt{@}} se také načte celé a porovná
+        s~\texttt{main}, místo aby mělo vlastní řetězec stavů,
+    \item \textbf{rozsah desetinného literálu} se kontroluje funkcí
+        \texttt{strtod} až po načtení celého čísla; příliš velké číslo
+        i číslo, které by se zaokrouhlilo na nulu, je lexikální chyba
+        (nad rámec zadání, specifikace tuto kontrolu nevyžaduje).
+\end{itemize}
+
+\paragraph{Chyby.}
+Lexikální chybou je například neznámý znak, chybný zápis čísla
+(\texttt{05} -- počáteční nuly, \texttt{1\_}, \texttt{1e}), neukončený
+řetězec nebo komentář, neplatná escape sekvence, desetinný literál mimo
+rozsah nebo chybné odsazení.
+Skener v~takovém případě vypíše na \texttt{stderr} hlášení s~číslem řádku
+a \texttt{get\_token()} vrátí~1. Parser tento kód předá dál a překladač
+skončí s~návratovým kódem~1. Pokud selže alokace paměti, překladač skončí
+s~kódem~99.
