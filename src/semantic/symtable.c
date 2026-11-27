@@ -1,7 +1,7 @@
 /**
  * Project IFJ26 compiler
  * File: symtable.c
- * Description: Implementation of open addressing symbol table (TRP-izp) and scope stack
+ * Description: open addressing hash table (TRP-izp) and scope stack
  * Author: <xstrelm00> Maksym Streltsov
  */
 
@@ -11,6 +11,23 @@
 
 #define SYMTABLE_DEFAULT_CAPACITY 31
 #define SCOPE_STACK_INITIAL_CAP 16
+
+typedef enum {
+    SLOT_EMPTY = 0,
+    SLOT_OCCUPIED,
+    SLOT_DELETED
+} SlotState;
+
+typedef struct {
+    SlotState state;
+    Symbol sym;
+} SymSlot;
+
+struct SymTable {
+    SymSlot *slots;
+    size_t capacity;
+    size_t size;    // occupied + deleted
+};
 
 static char *sym_strdup(const char *s) {
     if (!s) return NULL;
@@ -22,21 +39,16 @@ static char *sym_strdup(const char *s) {
     return copy;
 }
 
-/**
- * djb2 hash with XOR.
- */
+// djb2 xor variant
 static size_t hash1(const char *key) {
     size_t h = 5381;
     unsigned char c;
     while ((c = (unsigned char)*key++) != 0) {
-        h = ((h << 5) + h) ^ c; // h * 33 ^ c
+        h = ((h << 5) + h) ^ c;
     }
     return h;
 }
 
-/**
- * Frees dynamically allocated fields inside a single occupied Symbol slot.
- */
 static void free_symbol_data(Symbol *sym) {
     if (!sym) return;
     free(sym->key);
@@ -58,9 +70,7 @@ static void free_symbol_data(Symbol *sym) {
     sym->num_param_lists = 0;
 }
 
-/**
- * Deep-copies a Symbol structure (key and param_lists).
- */
+// deep copy key + param lists so table owns its memory
 static int clone_symbol_data(Symbol *dst, const Symbol *src) {
     *dst = *src;
     dst->key = NULL;
@@ -109,16 +119,15 @@ static int clone_symbol_data(Symbol *dst, const Symbol *src) {
         }
     }
 
-    dst->state = SLOT_OCCUPIED;
     return 0;
 }
 
-bool symtable_init_inplace(SymTable *t, size_t initial_capacity) {
+static bool symtable_init_inplace(SymTable *t, size_t initial_capacity) {
     if (!t) return false;
     if (initial_capacity == 0) {
         initial_capacity = SYMTABLE_DEFAULT_CAPACITY;
     }
-    t->slots = (Symbol *)calloc(initial_capacity, sizeof(Symbol));
+    t->slots = (SymSlot *)calloc(initial_capacity, sizeof(SymSlot));
     if (!t->slots) {
         t->capacity = 0;
         t->size = 0;
@@ -147,13 +156,13 @@ Symbol *symtable_search(SymTable *t, const char *key) {
     size_t h = hash1(key);
     for (size_t i = 0; i < t->capacity; i++) {
         size_t index = (h + i) % t->capacity;
-        Symbol *slot = &t->slots[index];
+        SymSlot *slot = &t->slots[index];
 
         if (slot->state == SLOT_EMPTY) {
             return NULL;
         }
-        if (slot->state == SLOT_OCCUPIED && strcmp(slot->key, key) == 0) {
-            return slot;
+        if (slot->state == SLOT_OCCUPIED && strcmp(slot->sym.key, key) == 0) {
+            return &slot->sym;
         }
     }
 
@@ -166,7 +175,7 @@ int symtable_rehash(SymTable *t, size_t new_capacity) {
         new_capacity = t->capacity * 2 + 1;
     }
 
-    Symbol *new_slots = (Symbol *)calloc(new_capacity, sizeof(Symbol));
+    SymSlot *new_slots = (SymSlot *)calloc(new_capacity, sizeof(SymSlot));
     if (!new_slots) {
         return 99;
     }
@@ -174,11 +183,11 @@ int symtable_rehash(SymTable *t, size_t new_capacity) {
     size_t new_size = 0;
     for (size_t i = 0; i < t->capacity; i++) {
         if (t->slots[i].state == SLOT_OCCUPIED) {
-            size_t h = hash1(t->slots[i].key);
+            size_t h = hash1(t->slots[i].sym.key);
             for (size_t step = 0; step < new_capacity; step++) {
                 size_t idx = (h + step) % new_capacity;
                 if (new_slots[idx].state == SLOT_EMPTY) {
-                    new_slots[idx] = t->slots[i];
+                    new_slots[idx].sym = t->slots[i].sym;
                     new_slots[idx].state = SLOT_OCCUPIED;
                     new_size++;
                     break;
@@ -203,18 +212,19 @@ int symtable_insert(SymTable *t, Symbol new_sym) {
         }
     }
 
+    // grow past 0.7 load factor
     if ((double)(t->size + 1) / (double)t->capacity > 0.7) {
         int err = symtable_rehash(t, t->capacity * 2 + 1);
         if (err != 0) return err;
     }
 
     size_t h = hash1(new_sym.key);
-    Symbol *first_deleted = NULL;
-    Symbol *target_slot = NULL;
+    SymSlot *first_deleted = NULL;
+    SymSlot *target_slot = NULL;
 
     for (size_t i = 0; i < t->capacity; i++) {
         size_t index = (h + i) % t->capacity;
-        Symbol *slot = &t->slots[index];
+        SymSlot *slot = &t->slots[index];
 
         if (slot->state == SLOT_EMPTY) {
             target_slot = first_deleted ? first_deleted : slot;
@@ -224,8 +234,8 @@ int symtable_insert(SymTable *t, Symbol new_sym) {
                 first_deleted = slot;
             }
         } else if (slot->state == SLOT_OCCUPIED) {
-            if (strcmp(slot->key, new_sym.key) == 0) {
-                return 4; // Duplicate declaration error (error code 4)
+            if (strcmp(slot->sym.key, new_sym.key) == 0) {
+                return 4; // redefinition
             }
         }
     }
@@ -238,13 +248,27 @@ int symtable_insert(SymTable *t, Symbol new_sym) {
     }
 
     bool was_empty = (target_slot->state == SLOT_EMPTY);
-    int err = clone_symbol_data(target_slot, &new_sym);
+    int err = clone_symbol_data(&target_slot->sym, &new_sym);
     if (err != 0) {
         return err;
     }
+    target_slot->state = SLOT_OCCUPIED;
 
     if (was_empty) {
         t->size++;
+    }
+    return 0;
+}
+
+int symtable_foreach(SymTable *t, symtable_iter_fn fn, void *ctx) {
+    if (!t || !t->slots || !fn) return 0;
+    for (size_t i = 0; i < t->capacity; i++) {
+        if (t->slots[i].state == SLOT_OCCUPIED) {
+            int err = fn(&t->slots[i].sym, ctx);
+            if (err != 0) {
+                return err;
+            }
+        }
     }
     return 0;
 }
@@ -253,7 +277,7 @@ void symtable_dispose(SymTable *t) {
     if (!t || !t->slots) return;
     for (size_t i = 0; i < t->capacity; i++) {
         if (t->slots[i].state == SLOT_OCCUPIED) {
-            free_symbol_data(&t->slots[i]);
+            free_symbol_data(&t->slots[i].sym);
         }
     }
     free(t->slots);
@@ -268,7 +292,7 @@ void symtable_free(SymTable *t) {
     free(t);
 }
 
-/* --- ScopeStack operations --- */
+// scope stack
 
 bool scope_stack_init(ScopeStack *s) {
     if (!s) return false;
@@ -325,7 +349,6 @@ int scope_declare_var(ScopeStack *s, const char *name, DataType type, bool is_mu
 
     Symbol sym;
     memset(&sym, 0, sizeof(Symbol));
-    sym.state = SLOT_OCCUPIED;
     sym.key = (char *)name;
     sym.kind = SYM_VAR;
     sym.type = type;

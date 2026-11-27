@@ -1,8 +1,7 @@
 /**
  * Project IFJ26 compiler
  * File: semantic.c
- * Description: Two-pass semantic analyzer supporting BOOLTHEN, FUNEXP, CONTROL,
- *              VALMEM and PARAMLISTS extensions.
+ * Description: two-pass semantic analysis
  * Author: <xstrelm00> Maksym Streltsov
  */
 
@@ -19,8 +18,6 @@ static char *sem_strdup(const char *s) {
     }
     return copy;
 }
-
-/* Semantic analysis context */
 
 bool semantic_context_init(SemanticContext *ctx) {
     if (!ctx) return false;
@@ -46,8 +43,7 @@ void semantic_context_free(SemanticContext *ctx) {
     ctx->current_func = NULL;
 }
 
-/* Type compatibility */
-
+// implicit Int -> Double widening gets flagged directly on parser node for codegen
 static void mark_widening(ASTNode *node) {
     if (!node) return;
     node->conv_to_double = true;
@@ -64,13 +60,12 @@ bool check_type_compat(DataType expected, DataType actual, ASTNode *actual_node)
     return false;
 }
 
-/* Built-in functions and properties */
+// builtins
 
 static int add_builtin_func(SymTable *table, const char *name, DataType ret_type,
                             size_t param_count, const DataType *param_types) {
     Symbol sym;
     memset(&sym, 0, sizeof(Symbol));
-    sym.state = SLOT_OCCUPIED;
     sym.key = (char *)name;
     sym.kind = SYM_FUNC;
     sym.return_type = ret_type;
@@ -114,9 +109,7 @@ int semantic_register_builtins(SemanticContext *ctx) {
     return SEM_OK;
 }
 
-/**
- * Checks if a property name is one of the known VALMEM properties on ANY type.
- */
+// used to tell error 6 (wrong receiver type) apart from error 3 (unknown member)
 static bool is_known_valmem_name(const char *member_name) {
     if (!member_name) return false;
     return (strcmp(member_name, "toString") == 0 ||
@@ -125,10 +118,7 @@ static bool is_known_valmem_name(const char *member_name) {
             strcmp(member_name, "length") == 0);
 }
 
-/**
- * Validates that all parameter names across all parameter lists
- * are pairwise distinct. Returns 0 if unique, SEM_ERR_REDEF (4) on duplicate.
- */
+// param names must be unique across all (...) lists, otherwise err 4
 static int check_unique_params(const ASTNode *fn_node) {
     for (size_t i1 = 0; i1 < fn_node->num_param_lists; i1++) {
         for (size_t j1 = 0; j1 < fn_node->param_lists[i1].count; j1++) {
@@ -150,9 +140,7 @@ static int check_unique_params(const ASTNode *fn_node) {
     return SEM_OK;
 }
 
-/**
- * Helper to register a single top-level AST_FUNC_DEF node in Pass 1.
- */
+// pass 1: put top-level function into global table
 static int register_top_level_func(SemanticContext *ctx, ASTNode *fn_node, int *main_count) {
     if (!fn_node || !fn_node->name) return SEM_ERR_INTERNAL;
 
@@ -161,24 +149,23 @@ static int register_top_level_func(SemanticContext *ctx, ASTNode *fn_node, int *
         return err;
     }
 
-    // Check @main constraints if annotated
     if (fn_node->is_main) {
         (*main_count)++;
         if (*main_count > 1) {
-            return SEM_ERR_REDEF; // More than one @main -> error 4
+            return SEM_ERR_REDEF;
         }
+        // @main only takes ()
         if (!fn_node->has_parens || fn_node->num_param_lists != 1 ||
             !fn_node->param_lists || fn_node->param_lists[0].count != 0) {
-            return SEM_ERR_CALL; // @main must have exactly one empty param list () -> error 5
+            return SEM_ERR_CALL;
         }
         if (fn_node->has_explicit_return && fn_node->declared_type != (DataType)TYPE_UNIT) {
-            return SEM_ERR_TYPE; // Explicit return type on @main must be Unit -> error 6
+            return SEM_ERR_TYPE;
         }
     }
 
     Symbol sym;
     memset(&sym, 0, sizeof(Symbol));
-    sym.state = SLOT_OCCUPIED;
     sym.key = fn_node->name;
     sym.kind = SYM_FUNC;
     sym.has_explicit_return = fn_node->has_explicit_return;
@@ -192,8 +179,6 @@ static int register_top_level_func(SemanticContext *ctx, ASTNode *fn_node, int *
 
     return symtable_insert(ctx->global_funcs, sym);
 }
-
-/* Return checking */
 
 static bool guarantees_return(ASTNode *node) {
     if (!node) return false;
@@ -218,10 +203,7 @@ static bool guarantees_return(ASTNode *node) {
     }
 }
 
-/**
- * Helper to obtain a pointer to the last expression of a function body
- * so that conv_to_double can be set on it if needed.
- */
+// grabs the trailing expr of a body so we can attach widening/discard flags to it
 static ASTNode *get_last_expr_node(ASTNode *body) {
     if (!body) return NULL;
     if (body->kind == AST_BLOCK) {
@@ -231,8 +213,6 @@ static ASTNode *get_last_expr_node(ASTNode *body) {
     return body;
 }
 
-/* Function body analysis and return type inference */
-
 int analyze_function(SemanticContext *ctx, Symbol *fn) {
     if (!ctx || !fn) return SEM_ERR_INTERNAL;
 
@@ -240,16 +220,16 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
         return SEM_OK;
     }
     if (fn->infer_state == INFER_IN_PROGRESS) {
-        // Cycle in call graph (recursion)
+        // hit recursion while still inferring return type -> needs explicit ': Type'
         if (!fn->has_explicit_return) {
-            return SEM_ERR_TYPE; // Recursion without explicit return type -> error 6
+            return SEM_ERR_TYPE;
         }
         return SEM_OK;
     }
 
     fn->infer_state = INFER_IN_PROGRESS;
 
-    // Return type inference can analyze another function before this one finishes.
+    // save current func + scopes since type inference can jump into another func
     Symbol *prev_func = ctx->current_func;
     ScopeStack prev_scopes = ctx->local_scopes;
 
@@ -268,7 +248,7 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
         return err;
     }
 
-    // Bind all parameters from all parameter lists (is_mutable = false)
+    // bind params (all immutable)
     for (size_t i = 0; i < fn->num_param_lists; i++) {
         for (size_t j = 0; j < fn->param_lists[i].count; j++) {
             const char *pname = fn->param_lists[i].names ? fn->param_lists[i].names[j] : NULL;
@@ -286,7 +266,7 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
         }
     }
 
-    // A trailing 'if' supplies the body value when the return type is inferred or non-Unit.
+    // trailing if/else acts as return value unless func explicitly returns Unit
     ASTNode *body_node = fn->ast_node ? fn->ast_node->body : NULL;
     if (body_node) {
         ASTNode *last_node = get_last_expr_node(body_node);
@@ -305,7 +285,6 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
         return err;
     }
 
-    // Verify body_type against function header
     if (fn->has_explicit_return) {
         if (fn->return_type == (DataType)TYPE_UNIT) {
             ASTNode *last = get_last_expr_node(body_node);
@@ -346,19 +325,14 @@ int analyze_function(SemanticContext *ctx, Symbol *fn) {
     return SEM_OK;
 }
 
-/* Statement and expression analysis */
-
-/**
- * Helper to validate argument lists for function calls.
- */
 static int check_call_arg_lists(SemanticContext *ctx, Symbol *fn, ASTNode *call_node) {
     if (call_node->num_arg_lists != fn->num_param_lists) {
-        return SEM_ERR_CALL; // Error 5
+        return SEM_ERR_CALL;
     }
 
     for (size_t i = 0; i < fn->num_param_lists; i++) {
         if (call_node->arg_lists[i].count != fn->param_lists[i].count) {
-            return SEM_ERR_CALL; // Error 5
+            return SEM_ERR_CALL;
         }
         for (size_t j = 0; j < fn->param_lists[i].count; j++) {
             ASTNode *arg_node = call_node->arg_lists[i].args[j];
@@ -368,7 +342,7 @@ static int check_call_arg_lists(SemanticContext *ctx, Symbol *fn, ASTNode *call_
                 return err;
             }
             if (!check_type_compat(fn->param_lists[i].types[j], arg_type, arg_node)) {
-                return SEM_ERR_CALL; // Error 5
+                return SEM_ERR_CALL;
             }
         }
     }
@@ -437,7 +411,6 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             DataType rhs_type = analyze_expr(ctx, node->init_expr, err);
             if (*err != SEM_OK) return TYPE_UNKNOWN;
 
-            // Cannot initialize a variable with Unit or Unknown
             if (rhs_type == TYPE_UNKNOWN) {
                 *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
@@ -456,7 +429,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             int decl_err = scope_declare_var(&ctx->local_scopes, node->name,
                                              final_type, node->is_mutable, uid, NULL);
             if (decl_err != SEM_OK) {
-                *err = decl_err; // 4 on duplicate in same block
+                *err = decl_err; // duplicate in same block -> 4
                 return TYPE_UNKNOWN;
             }
 
@@ -468,11 +441,11 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
         case AST_ASSIGN: {
             Symbol *sym = scope_lookup_var(&ctx->local_scopes, node->name);
             if (!sym) {
-                *err = SEM_ERR_UNDEF; // Error 3
+                *err = SEM_ERR_UNDEF;
                 return TYPE_UNKNOWN;
             }
             if (!sym->is_mutable) {
-                *err = SEM_ERR_IMMUTABLE; // Error 7
+                *err = SEM_ERR_IMMUTABLE;
                 return TYPE_UNKNOWN;
             }
 
@@ -480,7 +453,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             if (*err != SEM_OK) return TYPE_UNKNOWN;
 
             if (!check_type_compat(sym->type, rhs_type, node->rhs)) {
-                *err = SEM_ERR_TYPE; // Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
@@ -500,17 +473,17 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
 
             Symbol *fn = symtable_search(ctx->global_funcs, node->name);
             if (!fn) {
-                *err = SEM_ERR_UNDEF; // Error 3
+                *err = SEM_ERR_UNDEF;
                 return TYPE_UNKNOWN;
             }
 
+            // defined with parens, called without them -> 5
             if (fn->has_parens) {
-                // Function declared with parentheses, called without parentheses -> Error 5
                 *err = SEM_ERR_CALL;
                 return TYPE_UNKNOWN;
             }
 
-            // Parameterless function call (PARAMLISTS)
+            // bare call of parameterless func (PARAMLISTS)
             if (fn->return_type == TYPE_UNKNOWN) {
                 int fn_err = analyze_function(ctx, fn);
                 if (fn_err != SEM_OK) {
@@ -528,12 +501,12 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
         case AST_FUNC_CALL: {
             Symbol *fn = symtable_search(ctx->global_funcs, node->name);
             if (!fn) {
-                *err = SEM_ERR_UNDEF; // Error 3
+                *err = SEM_ERR_UNDEF;
                 return TYPE_UNKNOWN;
             }
 
+            // defined without parens (def x = 42), called as x() -> 5
             if (!fn->has_parens) {
-                // Function declared without parens (def answer = 42), called as answer() -> Error 5
                 *err = SEM_ERR_CALL;
                 return TYPE_UNKNOWN;
             }
@@ -567,7 +540,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                 return TYPE_UNKNOWN;
             }
 
-            // Resolve built-in VALMEM properties.
+            // valmem members; Int works for toInt/floor too via Int -> Double widening
             bool is_num = (rec_type == (DataType)TYPE_DOUBLE || rec_type == (DataType)TYPE_INT);
             bool is_tostring = (strcmp(mname, "toString") == 0 && rec_type != TYPE_UNKNOWN);
             bool is_num_toint = (is_num && strcmp(mname, "toInt") == 0);
@@ -576,7 +549,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
 
             if (is_tostring || is_num_toint || is_num_floor || is_str_len) {
                 if (node->has_parens) {
-                    // VALMEM properties must be accessed strictly without parentheses -> Error 5
+                    // no parens allowed on valmem properties
                     *err = SEM_ERR_CALL;
                     return TYPE_UNKNOWN;
                 }
@@ -601,11 +574,10 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             DataType cond_type = analyze_expr(ctx, node->cond, err);
             if (*err != SEM_OK) return TYPE_UNKNOWN;
             if (cond_type != TYPE_BOOLEAN) {
-                *err = SEM_ERR_TYPE; // Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
-            // Analyze then-branch in its own scope
             int p_err = scope_push(&ctx->local_scopes);
             if (p_err != SEM_OK) { *err = p_err; return TYPE_UNKNOWN; }
             if (node->is_expression && node->then_branch) {
@@ -616,7 +588,6 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             scope_pop(&ctx->local_scopes);
             if (*err != SEM_OK) return TYPE_UNKNOWN;
 
-            // Analyze else-branch if present
             DataType else_type = (DataType)TYPE_UNIT;
             if (node->else_branch) {
                 p_err = scope_push(&ctx->local_scopes);
@@ -633,7 +604,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             if (node->is_expression) {
                 if (node->parser_node) node->parser_node->if_has_value = true;
                 if (!node->else_branch) {
-                    *err = SEM_ERR_TYPE; // Missing else in if-expression -> Error 6
+                    *err = SEM_ERR_TYPE; // if-expr needs else
                     return TYPE_UNKNOWN;
                 }
                 if (then_type == else_type) {
@@ -652,11 +623,11 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                     node->sem_type = (DataType)TYPE_DOUBLE;
                     return (DataType)TYPE_DOUBLE;
                 }
-                *err = SEM_ERR_TYPE; // Incompatible branch types (e.g. Int and String) -> Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
-            // Used as statement
+            // statement form
             if (!node->else_branch) {
                 node->sem_type = (DataType)TYPE_UNIT;
                 return (DataType)TYPE_UNIT;
@@ -685,7 +656,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             DataType cond_type = analyze_expr(ctx, node->cond, err);
             if (*err != SEM_OK) return TYPE_UNKNOWN;
             if (cond_type != TYPE_BOOLEAN) {
-                *err = SEM_ERR_TYPE; // Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
@@ -706,7 +677,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             if (*err != SEM_OK) return TYPE_UNKNOWN;
 
             if (from_type != (DataType)TYPE_INT || end_type != (DataType)TYPE_INT) {
-                *err = SEM_ERR_TYPE; // Must be strictly Int -> Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
@@ -714,19 +685,19 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                 DataType step_type = analyze_expr(ctx, node->step_expr, err);
                 if (*err != SEM_OK) return TYPE_UNKNOWN;
                 if (step_type != (DataType)TYPE_INT) {
-                    *err = SEM_ERR_TYPE; // Must be strictly Int -> Error 6
+                    *err = SEM_ERR_TYPE;
                     return TYPE_UNKNOWN;
                 }
-                // Check for integer literal 0 in step (including -0)
+                // literal 0 or -0 in 'by' is error 10
                 ASTNode *s = node->step_expr;
                 if (s->kind == AST_LITERAL && s->is_int_literal && s->int_val == 0) {
-                    *err = SEM_ERR_OTHER; // Error 10!
+                    *err = SEM_ERR_OTHER;
                     return TYPE_UNKNOWN;
                 }
                 if (s->kind == AST_UNOP && s->op == OP_NEG && s->operand &&
                     s->operand->kind == AST_LITERAL && s->operand->is_int_literal &&
                     s->operand->int_val == 0) {
-                    *err = SEM_ERR_OTHER; // Error 10!
+                    *err = SEM_ERR_OTHER;
                     return TYPE_UNKNOWN;
                 }
             }
@@ -744,7 +715,6 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
             }
             node->unique_var_id = uid;
 
-            // Verify all guards have TYPE_BOOLEAN
             for (size_t i = 0; i < node->guard_count; i++) {
                 DataType g_type = analyze_expr(ctx, node->guards[i], err);
                 if (*err != SEM_OK) {
@@ -753,7 +723,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                 }
                 if (g_type != TYPE_BOOLEAN) {
                     scope_pop(&ctx->local_scopes);
-                    *err = SEM_ERR_TYPE; // Error 6
+                    *err = SEM_ERR_TYPE;
                     return TYPE_UNKNOWN;
                 }
             }
@@ -767,14 +737,15 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
         }
 
         case AST_RETURN: {
+            // using 'return' requires explicit ': Type' on the function
             if (!ctx->current_func || !ctx->current_func->has_explicit_return) {
-                *err = SEM_ERR_TYPE; // Explicit return type in header is mandatory when using 'return' -> Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
             if (!node->return_expr) {
                 if (ctx->current_func->return_type != (DataType)TYPE_UNIT) {
-                    *err = SEM_ERR_TYPE; // Bare 'return' only allowed in Unit function -> Error 6
+                    *err = SEM_ERR_TYPE;
                     return TYPE_UNKNOWN;
                 }
             } else {
@@ -787,7 +758,7 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                     }
                 } else {
                     if (!check_type_compat(ctx->current_func->return_type, ret_type, node->return_expr)) {
-                        *err = SEM_ERR_TYPE; // Error 6
+                        *err = SEM_ERR_TYPE;
                         return TYPE_UNKNOWN;
                     }
                 }
@@ -806,14 +777,14 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
                     node->sem_type = op_type;
                     return op_type;
                 }
-                *err = SEM_ERR_TYPE; // Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             } else if (node->op == OP_NOT) {
                 if (op_type == TYPE_BOOLEAN) {
                     node->sem_type = TYPE_BOOLEAN;
                     return TYPE_BOOLEAN;
                 }
-                *err = SEM_ERR_TYPE; // Error 6
+                *err = SEM_ERR_TYPE;
                 return TYPE_UNKNOWN;
             }
 
@@ -937,24 +908,28 @@ DataType analyze_node(SemanticContext *ctx, ASTNode *node, int *err) {
     }
 }
 
-/* Two-pass semantic analysis */
+static int check_func_symbol(Symbol *sym, void *user_data) {
+    if (sym->kind == SYM_FUNC && sym->ast_node != NULL) {
+        return analyze_function((SemanticContext *)user_data, sym);
+    }
+    return SEM_OK;
+}
 
 int semantic_analyze(ASTNode *root) {
-    if (!root) return SEM_ERR_UNDEF; // No @main -> Error 3
+    if (!root) return SEM_ERR_UNDEF;
 
     SemanticContext ctx;
     if (!semantic_context_init(&ctx)) {
         return SEM_ERR_INTERNAL;
     }
 
-    // Register built-in functions.
     int err = semantic_register_builtins(&ctx);
     if (err != SEM_OK) {
         semantic_context_free(&ctx);
         return err;
     }
 
-    // Register top-level functions before checking bodies.
+    // pass 1: collect all function headers
     int main_count = 0;
     for (size_t i = 0; i < root->item_count; i++) {
         ASTNode *item = root->items[i];
@@ -969,29 +944,23 @@ int semantic_analyze(ASTNode *root) {
         }
     }
 
-    // Must have exactly one @main
     if (main_count == 0) {
         semantic_context_free(&ctx);
-        return SEM_ERR_UNDEF; // Error 3
+        return SEM_ERR_UNDEF;
     }
 
-    // Check the bodies of registered functions.
-    for (size_t i = 0; i < ctx.global_funcs->capacity; i++) {
-        Symbol *slot = &ctx.global_funcs->slots[i];
-        if (slot->state == SLOT_OCCUPIED && slot->kind == SYM_FUNC && slot->ast_node != NULL) {
-            err = analyze_function(&ctx, slot);
-            if (err != SEM_OK) {
-                semantic_context_free(&ctx);
-                return err;
-            }
-        }
+    // pass 2: check bodies
+    err = symtable_foreach(ctx.global_funcs, check_func_symbol, &ctx);
+    if (err != SEM_OK) {
+        semantic_context_free(&ctx);
+        return err;
     }
 
     semantic_context_free(&ctx);
     return SEM_OK;
 }
 
-/* AST cleanup and conversion from the parser AST */
+// ast cleanup + bridge from parser ast_node
 
 void semantic_ast_free(ASTNode *node) {
     if (!node) return;
