@@ -140,7 +140,8 @@ static void cg_params_pop(ast_node *param) {
 }
 
 static void cg_param_lists_pop(ast_node *list) {
-  if (!list) return;
+  if (!list)
+    return;
   cg_param_lists_pop(list->right);
   cg_params_pop(list->left);
 }
@@ -195,10 +196,14 @@ static void cg_expression_value(const ast_node *expr) {
   }
   if (expr->node_type == NODE_MEMBER) {
     cg_expression(expr->left);
-    if (strcmp(expr->value, "toString") == 0) printf("CALL $toStr\n");
-    else if (strcmp(expr->value, "toInt") == 0) printf("CALL $toInt\n");
-    else if (strcmp(expr->value, "length") == 0) printf("CALL $strLength\n");
-    else printf("CALL $$floor\n");
+    if (strcmp(expr->value, "toString") == 0)
+      printf("CALL $toStr\n");
+    else if (strcmp(expr->value, "toInt") == 0)
+      printf("CALL $toInt\n");
+    else if (strcmp(expr->value, "length") == 0)
+      printf("CALL $strLength\n");
+    else
+      printf("CALL $$floor\n");
     return;
   }
   if (expr->node_type != NODE_EXPRESSION && expr->node_type != NODE_CONDITION) {
@@ -237,8 +242,10 @@ static void cg_expression_value(const ast_node *expr) {
 // Generates an expression and leaves its result on the data stack.
 static void cg_expression(const ast_node *expr) {
   cg_expression_value(expr);
-  if (expr && expr->widen_to_double) printf("INT2FLOATS\n");
-  if (expr && expr->discard_value) printf("POPS GF@$discard\nPUSHS nil@nil\n");
+  if (expr && expr->widen_to_double)
+    printf("INT2FLOATS\n");
+  if (expr && expr->discard_value)
+    printf("POPS GF@$discard\nPUSHS nil@nil\n");
 }
 
 /* ---------- Statements ---------- */
@@ -252,7 +259,8 @@ static void cg_defvars(const ast_node *node) {
     cg_defvars(node->left);
     node = node->right;
   }
-  if (!node) return;
+  if (!node)
+    return;
   if (node->node_type == NODE_VAR_DEF || node->node_type == NODE_VAL_DEF) {
     cg_defvars(node->right);
     printf("DEFVAR LF@%s$%d\n", node->value, ++cg_var_count);
@@ -312,15 +320,19 @@ static void cg_if(const ast_node *stmt, bool keep_value) {
   printf("PUSHS bool@false\n");
   printf("JUMPIFEQS $$if%d$else\n", id); // Condition is false
   if (body != NULL) {
-    if (keep_value) cg_body(body->left);
-    else cg_block(body->left);
+    if (keep_value)
+      cg_body(body->left);
+    else
+      cg_block(body->left);
     cg_scope_top = saved_top;
   }
   printf("JUMP $$if%d$end\n", id);
   printf("LABEL $$if%d$else\n", id);
   if (body != NULL) {
-    if (keep_value) cg_body(body->right);
-    else cg_block(body->right);
+    if (keep_value)
+      cg_body(body->right);
+    else
+      cg_block(body->right);
     cg_scope_top = saved_top;
   }
   printf("LABEL $$if%d$end\n", id);
@@ -348,8 +360,10 @@ static void cg_for(const ast_node *stmt) {
 
   cg_expression(start->left);
   cg_expression(end->left);
-  if (step->left) cg_expression(step->left);
-  else printf("PUSHS int@1\n");
+  if (step->left)
+    cg_expression(step->left);
+  else
+    printf("PUSHS int@1\n");
 
   cg_declare(stmt->value);
   int id = cg_var_count;
@@ -380,10 +394,10 @@ static void cg_for(const ast_node *stmt) {
 
   printf("LABEL $$for%d$next\n", label);
   if (stmt->inclusive_range)
-    printf("JUMPIFEQ $$for%d$end LF@%s$%d LF@$forEnd%d\n",
-           label, stmt->value, id, id);
-  printf("ADD LF@%s$%d LF@%s$%d LF@$forStep%d\n",
-         stmt->value, id, stmt->value, id, id);
+    printf("JUMPIFEQ $$for%d$end LF@%s$%d LF@$forEnd%d\n", label, stmt->value,
+           id, id);
+  printf("ADD LF@%s$%d LF@%s$%d LF@$forStep%d\n", stmt->value, id, stmt->value,
+         id, id);
   printf("JUMP $$for%d$check\nLABEL $$for%d$end\n", label, label);
   cg_scope_top = saved_top;
 }
@@ -442,14 +456,16 @@ static void cg_body(const ast_node *body) {
     }
     if (body->right == NULL && stmt->if_has_value) {
       cg_if(stmt, true);
-      if (stmt->widen_to_double) printf("INT2FLOATS\n");
-      if (stmt->discard_value) printf("POPS GF@$discard\nPUSHS nil@nil\n");
+      if (stmt->widen_to_double)
+        printf("INT2FLOATS\n");
+      if (stmt->discard_value)
+        printf("POPS GF@$discard\nPUSHS nil@nil\n");
       return;
     }
-    if (body->right == NULL && (stmt->node_type == NODE_FUN_CALL ||
-                                stmt->node_type == NODE_EXPRESSION ||
-                                stmt->node_type == NODE_TERM ||
-                                stmt->node_type == NODE_MEMBER)) {
+    if (body->right == NULL &&
+        (stmt->node_type == NODE_FUN_CALL ||
+         stmt->node_type == NODE_EXPRESSION || stmt->node_type == NODE_TERM ||
+         stmt->node_type == NODE_MEMBER)) {
       cg_expression(stmt); // Last call or expression gives the result
       return;
     }
