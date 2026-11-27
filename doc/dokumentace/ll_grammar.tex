@@ -1,0 +1,45 @@
+
+\providecommand{\T}[1]{\texttt{#1}}
+\providecommand{\nt}[1]{$\langle$\textit{#1}$\rangle$}
+\providecommand{\rn}[1]{\textcolor{gray}{\scriptsize(#1)}\,}
+\providecommand{\alt}{\enspace$|$\enspace}
+\begin{longtable}{@{}r@{\hspace{0.5em}}c@{\hspace{0.5em}}p{12.2cm}@{}}
+\nt{program}     & $\rightarrow$ & \rn{1}\T{import} \T{id} \T{.} \T{*} \nt{eols} \nt{functions} \T{EOF} \\
+\nt{functions}   & $\rightarrow$ & \rn{2}\nt{function} \nt{eols} \nt{functions} \alt \rn{3}$\varepsilon$ \\
+\nt{function}    & $\rightarrow$ & \rn{4}\nt{main\_opt} \T{def} \T{id} \nt{param\_lists} \nt{type\_opt} \T{=} \nt{fun\_body} \\
+\nt{main\_opt}   & $\rightarrow$ & \rn{5}\T{@main} \nt{eols} \alt \rn{6}$\varepsilon$ \\[4pt]
+\nt{param\_lists}& $\rightarrow$ & \rn{7}\T{(} \nt{params} \T{)} \nt{param\_lists} \alt \rn{8}$\varepsilon$ \\
+\nt{params}      & $\rightarrow$ & \rn{9}\T{id} \T{:} \nt{type} \nt{params\_n} \alt \rn{10}$\varepsilon$ \\
+\nt{params\_n}   & $\rightarrow$ & \rn{11}\T{,} \nt{param\_next} \alt \rn{12}$\varepsilon$ \\
+\nt{param\_next} & $\rightarrow$ & \rn{13}\T{id} \T{:} \nt{type} \nt{params\_n} \alt \rn{14}$\varepsilon^{*}$ \\
+\nt{type\_opt}   & $\rightarrow$ & \rn{15}\T{:} \nt{type} \alt \rn{16}$\varepsilon$ \\
+\nt{type}        & $\rightarrow$ & \rn{17}\T{Int} $|$ \T{Double} $|$ \T{String} $|$ \T{Unit} $|$ \T{Boolean} \\[4pt]
+\nt{fun\_body}   & $\rightarrow$ & \rn{18}\T{EOL} \T{INDENT} \nt{block} \T{DEDENT} \alt \rn{19}\T{expr} \\
+\nt{block}       & $\rightarrow$ & \rn{20}\nt{statement} \nt{sep} \nt{block} \alt \rn{21}$\varepsilon$ \\
+\nt{sep}         & $\rightarrow$ & \rn{22}\T{;} \nt{eols} \alt \rn{23}\nt{eols} \\
+\nt{statement}   & $\rightarrow$ & \rn{24}\T{val} \T{id} \nt{type\_opt} \T{=} \T{expr}
+                                   \alt \rn{25}\T{var} \T{id} \nt{type\_opt} \T{=} \T{expr} \\
+                 & $|$           & \rn{26}\T{id} \T{=} \T{expr}$^{**}$ \alt \rn{27}\T{expr}
+                                   \alt \rn{28}\T{return} \nt{ret\_expr} \alt \rn{29}\nt{if} \\
+                 & $|$           & \rn{30}\T{while} \T{expr} \T{do} \T{EOL} \T{INDENT} \nt{block} \T{DEDENT} \\
+                 & $|$           & \rn{31}\T{for} \nt{for\_head} \T{do} \nt{branch} \\
+\nt{ret\_expr}   & $\rightarrow$ & \rn{32}\T{expr} \alt \rn{33}$\varepsilon$ \\[4pt]
+\nt{range}       & $\rightarrow$ & \rn{34}\T{to} $|$ \T{until} \\
+\nt{step}        & $\rightarrow$ & \rn{35}\T{by} \T{expr} \alt \rn{36}$\varepsilon$ \\
+\nt{guards}      & $\rightarrow$ & \rn{37}\T{if} \T{expr} \nt{guards} \alt \rn{38}$\varepsilon$ \\
+\nt{if}          & $\rightarrow$ & \rn{39}\T{if} \T{expr} \T{then} \nt{branch} \nt{else\_opt} \\
+\nt{else\_opt}   & $\rightarrow$ & \rn{40}\T{else} \nt{branch} \alt \rn{41}$\varepsilon$ \\
+\nt{branch}      & $\rightarrow$ & \rn{42}\T{EOL} \T{INDENT} \nt{block} \T{DEDENT} \alt \rn{43}\nt{if} \alt \rn{44}\T{expr} \\[4pt]
+\nt{eols}        & $\rightarrow$ & \rn{45}\T{EOL} \nt{eols} \alt \rn{46}$\varepsilon$ \\
+\nt{args}        & $\rightarrow$ & \rn{47}\T{expr} \nt{args\_n} \alt \rn{48}$\varepsilon$ \\
+\nt{args\_n}     & $\rightarrow$ & \rn{49}\T{,} \nt{arg\_next} \alt \rn{50}$\varepsilon$ \\
+\nt{arg\_next}   & $\rightarrow$ & \rn{51}\T{expr} \nt{args\_n} \alt \rn{52}$\varepsilon^{*}$ \\[4pt]
+\nt{for\_head}   & $\rightarrow$ & \rn{53}\T{id} \T{<-} \T{expr} \nt{range} \T{expr} \nt{step} \nt{guards} \\
+                 & $|$           & \rn{54}\T{EOL} \T{INDENT} \T{id} \T{<-} \T{expr} \nt{range} \T{expr} \nt{step} \nt{ml\_guards} \T{EOL} \T{DEDENT} \\
+\nt{ml\_guards}  & $\rightarrow$ & \rn{55}\T{if} \T{expr} \nt{ml\_guards} \alt \rn{56}\T{EOL} \T{if} \T{expr} \nt{ml\_guards}$^{**}$ \alt \rn{57}$\varepsilon$ \\
+\end{longtable}
+\vspace{-0.5\baselineskip}
+{\footnotesize
+$^{*}$\,jen pokud je před \T{)} konec řádku (čárka na konci seznamu).\quad
+$^{**}$\,rozhoduje druhý token: pravidlo 26 se použije, když za \T{id}
+následuje \T{=}, pravidlo 56, když za \T{EOL} následuje \T{if}.\par}
